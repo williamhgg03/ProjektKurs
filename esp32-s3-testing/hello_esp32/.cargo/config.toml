@@ -2,8 +2,8 @@
 target = "xtensa-esp32s3-espidf"
 
 [target.'cfg(target_os = "espidf")']
-# Use the xtensa GCC installed by espup as the linker. Adjust path if your espup toolchain is elsewhere.
-linker = "/home/viktor/.cargo/bin/ldproxy"
+# ldproxy (installed by `cargo install ldproxy`) forwards to the linker chosen by the ESP-IDF build.
+linker = "ldproxy"
 runner = "espflash flash --monitor"
 rustflags = [ "--cfg",  "espidf_time64"]
 

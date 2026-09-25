@@ -1,17 +1,24 @@
-# WIFI_test_esp32 — build & flash helper
+# WIFI_test_esp32
 
-Quick commands to build/flash the ESP32-S3 (requires `espup` setup and `source ~/export-esp.sh`).
+Rust (std, ESP-IDF v5.5.3) firmware for the ESP32-S3.
 
-Makefile targets (from project root):
+## One-time setup
 
-- `make build` — build (debug) using the `esp` toolchain
-- `make release` — build release
-- `make flash` — build release and flash (runs the project's runner)
- - `make monitor` — open serial monitor (targets the `WIFI_test_esp32` release binary)
+```sh
+cargo install espup ldproxy espflash
+espup install        # installs the `esp` Rust toolchain for Xtensa
+```
 
-Scripts:
+`rust-toolchain.toml` selects the `esp` toolchain automatically. There is no need to
+source `~/export-esp.sh`: ESP-IDF and its compilers are downloaded into `.embuild/`
+on the first build (slow, needs internet, plus `git`, `cmake` and `python`).
 
-- `./scripts/build.sh` — same as `make build`
-- `./scripts/flash.sh` — flash the release binary (now named `WIFI_test_esp32`)
+## Build / flash
 
-VS Code: open the Command Palette -> `Tasks: Run Task` and pick `Build (esp)`, `Flash (esp)` or `Monitor (espflash)`.
+```sh
+cargo build                # debug build
+cargo build --release      # release build
+cargo run --release        # flash with espflash and open the serial monitor
+```
+
+VS Code: `Tasks: Run Task` → `Build (esp)`, `Build (esp) Release` or `Flash + Monitor (esp)`.
