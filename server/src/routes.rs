@@ -1,13 +1,16 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{Query, State};
+use axum::extract::{ConnectInfo, Query, Request, State};
 use axum::http::StatusCode;
 use axum::response::Html;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 use crate::led::{ConfigUpdate, LedError, LedState, Rgb};
 
@@ -29,6 +32,19 @@ pub fn router(state: AppState) -> Router {
         .route("/api/led/off", post(post_off))
         .route("/device/led", get(device_led))
         .with_state(state)
+        .layer(
+            // One log line per request: method, path and client in the span, status and latency on response.
+            TraceLayer::new_for_http()
+                .make_span_with(|req: &Request| {
+                    let client = req
+                        .extensions()
+                        .get::<ConnectInfo<SocketAddr>>()
+                        .map(|ConnectInfo(addr)| addr.to_string())
+                        .unwrap_or_default();
+                    tracing::info_span!("request", method = %req.method(), uri = %req.uri(), %client)
+                })
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
 }
 
 async fn index() -> Html<&'static str> {
