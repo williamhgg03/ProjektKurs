@@ -26,7 +26,7 @@ const T1L: Duration = Duration::from_nanos(300);
 /// Reset (latch) time in microseconds, line held low (>= 200us required).
 const T_RESET_US: u32 = 300;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
 pub struct Rgb {
     pub r: u8,
     pub g: u8,

@@ -1,98 +1,138 @@
 mod led_driver;
 
-fn main() {
-     
+use std::thread;
+use std::time::Duration;
+
+use esp_idf_svc::eventloop::EspSystemEventLoop;
+use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
+use esp_idf_svc::http::Method;
+use esp_idf_svc::nvs::EspDefaultNvsPartition;
+use esp_idf_svc::wifi::{BlockingWifi, ClientConfiguration, Configuration, EspWifi};
+use serde::Deserialize;
+
+use crate::led_driver::{LedStrip, Rgb};
+
+// Injected by build.rs from wifi.env or the environment, never stored in source
+const WIFI_SSID: &str = env!("WIFI_SSID");
+const WIFI_PASS: &str = env!("WIFI_PASS");
+const SERVER_URL: &str = env!("SERVER_URL");
+
+/// The server holds a long-poll open for up to 25s, so this must be longer.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(35);
+const RETRY_DELAY: Duration = Duration::from_secs(2);
+
+/// Response of the server's `GET /device/led`.
+#[derive(Deserialize)]
+struct DeviceFrame {
+    version: u64,
+    leds: Vec<Rgb>,
+}
+
+fn main() -> anyhow::Result<()> {
     // Required patching for esp-idf runtime
     esp_idf_svc::sys::link_patches();
 
     // Initialize logger
     esp_idf_svc::log::EspLogger::initialize_default();
-/*  
-    // Edit these with your network credentials
-    const WIFI_SSID: &str = "Kalle";
-    const WIFI_PASS: &str = "ugaf465k";
 
-    log::info!("Starting WiFi connect + ping example");
+    let peripherals = Peripherals::take()?;
+    let sysloop = EspSystemEventLoop::take()?;
+    let nvs = EspDefaultNvsPartition::take()?;
 
-    // Initialize NVS and event loop (netif will be created by EspWifi)
-    let _nvs = esp_idf_svc::nvs::EspDefaultNvsPartition::take_with(false).expect("failed to init NVS partition");
-    let sysloop = esp_idf_svc::eventloop::EspSystemEventLoop::take().expect("failed to take sysloop");
+    let mut strip = LedStrip::new(peripherals.pins.gpio0)?;
 
-    // Acquire modem peripheral and create the Wifi service
-    let modem = unsafe { esp_idf_svc::hal::modem::Modem::steal() };
-    let mut wifi = esp_idf_svc::wifi::EspWifi::new(modem, sysloop, Some(_nvs)).expect("failed to create wifi");
+    let mut wifi = BlockingWifi::wrap(
+        EspWifi::new(peripherals.modem, sysloop.clone(), Some(nvs))?,
+        sysloop,
+    )?;
+    connect_wifi(&mut wifi)?;
 
-    use esp_idf_svc::wifi::{Configuration, ClientConfiguration};
+    let mut http = new_http()?;
+    let mut since: Option<u64> = None;
 
+    log::info!("Polling {SERVER_URL}/device/led");
+    loop {
+        if !wifi.is_connected().unwrap_or(false) {
+            log::warn!("WiFi lost, reconnecting");
+            if let Err(e) = wifi.connect().and_then(|_| wifi.wait_netif_up()) {
+                log::error!("Reconnect failed: {e}");
+                thread::sleep(RETRY_DELAY);
+                continue;
+            }
+        }
 
-    let mut client_conf = ClientConfiguration::default();
-    client_conf.ssid = WIFI_SSID.try_into().expect("SSID too long");
-    client_conf.password = WIFI_PASS.try_into().expect("Password too long");
+        match fetch_frame(&mut http, since) {
+            Ok(frame) => {
+                if since != Some(frame.version) {
+                    log::info!("Frame v{} ({} LEDs)", frame.version, frame.leds.len());
+                    if let Err(e) = strip.write(&frame.leds) {
+                        log::error!("LED write failed: {e}");
+                    }
+                }
+                since = Some(frame.version);
+            }
+            Err(e) => {
+                log::warn!("Fetching frame failed: {e:?}");
+                since = None;
+                // The connection may be left mid-request, start over with a fresh one
+                http = new_http()?;
+                thread::sleep(RETRY_DELAY);
+            }
+        }
+    }
+}
 
-    wifi.set_configuration(&Configuration::Client(client_conf)).expect("failed to set wifi config");
-    wifi.start().expect("failed to start wifi");
-    wifi.connect().expect("failed to connect");
+fn connect_wifi(wifi: &mut BlockingWifi<EspWifi<'static>>) -> anyhow::Result<()> {
+    wifi.set_configuration(&Configuration::Client(ClientConfiguration {
+        ssid: WIFI_SSID
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("SSID too long"))?,
+        password: WIFI_PASS
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("password too long"))?,
+        ..Default::default()
+    }))?;
 
-    log::info!("Waiting for connection (30s)...");
-    let start = std::time::Instant::now();
-    while start.elapsed() < std::time::Duration::from_secs(30) {
-        if wifi.is_connected().unwrap_or(false) {
+    wifi.start()?;
+    log::info!("Connecting to WiFi...");
+    wifi.connect()?;
+    wifi.wait_netif_up()?;
+
+    let ip = wifi.wifi().sta_netif().get_ip_info()?;
+    log::info!("Connected, IP: {}", ip.ip);
+    Ok(())
+}
+
+fn new_http() -> anyhow::Result<EspHttpConnection> {
+    Ok(EspHttpConnection::new(&HttpConfiguration {
+        timeout: Some(HTTP_TIMEOUT),
+        ..Default::default()
+    })?)
+}
+
+/// GET the current frame. With `since` set the server waits until the frame
+/// changes (or its long-poll timeout passes) before answering.
+fn fetch_frame(http: &mut EspHttpConnection, since: Option<u64>) -> anyhow::Result<DeviceFrame> {
+    let url = match since {
+        Some(v) => format!("{SERVER_URL}/device/led?since={v}"),
+        None => format!("{SERVER_URL}/device/led"),
+    };
+
+    http.initiate_request(Method::Get, &url, &[("accept", "application/json")])?;
+    http.initiate_response()?;
+    let status = http.status();
+
+    let mut body = Vec::new();
+    let mut buf = [0u8; 1024];
+    loop {
+        let n = http.read(&mut buf)?;
+        if n == 0 {
             break;
         }
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        body.extend_from_slice(&buf[..n]);
     }
 
-    if !wifi.is_connected().unwrap_or(false) {
-        log::error!("Failed to connect to WiFi");
-        return;
-    }
-
-    let ip = wifi.sta_netif().get_ip_info().expect("failed to get ip info");
-    log::info!("Connected, IP: {:?}", ip.ip);
-
-    // Use EspPing to ping Google DNS (8.8.8.8)
-    let idx = wifi.sta_netif().get_index();
-    let mut pinger = esp_idf_svc::ping::EspPing::new(idx);
-    let cfg = esp_idf_svc::ping::Configuration { count: 4, ..Default::default() };
-
-    match pinger.ping(esp_idf_svc::ipv4::Ipv4Addr::new(8, 8, 8, 8), &cfg) {
-        Ok(summary) => log::info!("Ping summary: transmitted {}, received {}", summary.transmitted, summary.received),
-        Err(e) => log::error!("Ping failed: {}", e),
-    }
-
-    log::info!("Done");*/
-
-    // --- LED strip debug demo ---
-    // Uses GPIO0 to output GRB data for N segments, then resets and changes colours.
-    {
-        use std::thread;
-        use std::time::Duration;
-        use crate::led_driver::{LedStrip, Rgb};
-
-        const N_LEDS: usize = 40; // change as needed
-
-        let peripherals = esp_idf_svc::hal::peripherals::Peripherals::take().expect("failed to take peripherals");
-        let mut strip = LedStrip::new(peripherals.pins.gpio0).expect("failed to init LED strip");
-
-        // simple color rotation for debug
-        let mut cycle = 0u32;
-        for _ in 0..10 {
-            let mut colors: Vec<Rgb> = Vec::with_capacity(N_LEDS);
-            for i in 0..N_LEDS {
-                // create varying colors for visibility: rotate through red/green/blue
-                let r = (((i as u32 * 37).wrapping_add(cycle)) & 0xFF) as u8;
-                let g = (((i as u32 * 73).wrapping_add(cycle * 2)) & 0xFF) as u8;
-                let b = (((i as u32 * 97).wrapping_add(cycle * 3)) & 0xFF) as u8;
-                colors.push(Rgb { r, g, b });
-            }
-
-            log::info!("Sending LED frame #{}", cycle);
-            if let Err(e) = strip.write(&colors) {
-                log::error!("LED write failed: {}", e);
-            }
-            cycle = cycle.wrapping_add(1);
-
-            thread::sleep(Duration::from_millis(500));
-        }
-    }
+    anyhow::ensure!(status == 200, "server returned HTTP {status}");
+    Ok(serde_json::from_slice(&body)?)
 }
