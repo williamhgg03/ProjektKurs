@@ -1,2 +1,7 @@
 /target
+<<<<<<< Updated upstream
 imu.csv
+=======
+/server.pid
+/server.log
+>>>>>>> Stashed changes
