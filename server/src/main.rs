@@ -1,12 +1,16 @@
+mod imu;
 mod led;
 mod routes;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::watch;
 
+use crate::imu::ImuLog;
 use crate::led::LedState;
+use crate::routes::AppState;
 
 #[tokio::main]
 async fn main() {
@@ -19,7 +23,23 @@ async fn main() {
         .unwrap_or(80);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
-    let state = Arc::new(watch::Sender::new(LedState::default()));
+    // Every IMU sample is appended here, set IMU_LOG to change the path
+    let csv_path = PathBuf::from(std::env::var("IMU_LOG").unwrap_or_else(|_| "imu.csv".into()));
+    let imu = match ImuLog::with_csv(&csv_path) {
+        Ok(log) => {
+            tracing::info!("logging IMU samples to {}", csv_path.display());
+            log
+        }
+        Err(e) => {
+            tracing::warn!("cannot open {}: {e}, IMU samples will not be saved", csv_path.display());
+            ImuLog::default()
+        }
+    };
+
+    let state = AppState {
+        led: Arc::new(watch::Sender::new(LedState::default())),
+        imu: Arc::new(Mutex::new(imu)),
+    };
     let app = routes::router(state);
 
     let listener = match tokio::net::TcpListener::bind(addr).await {

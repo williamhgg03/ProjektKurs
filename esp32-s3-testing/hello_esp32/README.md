@@ -22,3 +22,19 @@ cargo run --release        # flash with espflash and open the serial monitor
 ```
 
 VS Code: `Tasks: Run Task` → `Build (esp)`, `Build (esp) Release` or `Flash + Monitor (esp)`.
+
+## Wiring
+
+| Part | Pin | ESP32-S3 |
+|---|---|---|
+| LED strip | DIN | GPIO0 |
+| MPU-6050 | VIN | 3V3 |
+| MPU-6050 | GND | GND |
+| MPU-6050 | SDA | GPIO4 |
+| MPU-6050 | SCL | GPIO5 |
+| MPU-6050 | INT | GPIO6 |
+| MPU-6050 | AD0 | GND or unconnected (I2C address 0x68) |
+
+The MPU-6050 pins are chosen in `main.rs`. The chip samples it at 100 Hz on the INT
+(data ready) pulse and POSTs the samples to `SERVER_URL/device/imu` every 500 ms.
+The server shows them at `/imu` and appends them to `imu.csv`.

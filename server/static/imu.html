@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IMU Monitor</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --border: #2d313a;
+    --text: #e6e8eb; --muted: #8b919c; --accent: #4f8cff; --danger: #e5484d;
+    --x: #f2555a; --y: #3dd68c; --z: #4f8cff;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; display: grid; gap: 16px; }
+  h1 { margin: 0; font-size: 20px; }
+  h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted);
+       text-transform: uppercase; letter-spacing: .05em; }
+  nav { display: flex; gap: 4px; }
+  nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border: 1px solid transparent; border-radius: 6px; }
+  nav a:hover { color: var(--text); }
+  nav a[aria-current] { color: var(--text); background: var(--panel); border-color: var(--border); }
+  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  #status { color: var(--muted); font-size: 13px; }
+  #status.ok::before { content: "● "; color: #3dd68c; }
+  #status.bad::before { content: "● "; color: var(--danger); }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  .head h2 { margin-bottom: 8px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  @media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .tile .label { color: var(--muted); font-size: 12px; }
+  .tile .value { font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tile .unit { color: var(--muted); font-size: 12px; margin-left: 2px; }
+  .legend { display: flex; gap: 12px; color: var(--muted); font-size: 12px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; border-radius: 2px;
+                         margin-right: 6px; vertical-align: middle; background: var(--c); }
+  canvas { display: block; width: 100%; height: 180px; background: var(--bg); border-radius: 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  a.button {
+    color: var(--text); text-decoration: none; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  }
+  a.button:hover { border-color: var(--muted); }
+  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <nav><a href="/">LED strip</a><a href="/imu" aria-current="page">IMU</a></nav>
+  <header>
+    <h1>IMU Monitor</h1>
+    <span id="status">connecting…</span>
+  </header>
+
+  <section>
+    <div class="head">
+      <h2>Live values</h2>
+      <span id="stats" class="note"></span>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="label">Accel X</div><div class="value"><span id="ax">–</span><span class="unit">g</span></div></div>
+      <div class="tile"><div class="label">Accel Y</div><div class="value"><span id="ay">–</span><span class="unit">g</span></div></div>
+      <div class="tile"><div class="label">Accel Z</div><div class="value"><span id="az">–</span><span class="unit">g</span></div></div>
+      <div class="tile"><div class="label">|Accel|</div><div class="value"><span id="amag">–</span><span class="unit">g</span></div></div>
+      <div class="tile"><div class="label">Gyro X</div><div class="value"><span id="gx">–</span><span class="unit">°/s</span></div></div>
+      <div class="tile"><div class="label">Gyro Y</div><div class="value"><span id="gy">–</span><span class="unit">°/s</span></div></div>
+      <div class="tile"><div class="label">Gyro Z</div><div class="value"><span id="gz">–</span><span class="unit">°/s</span></div></div>
+      <div class="tile"><div class="label">Temperature</div><div class="value"><span id="temp">–</span><span class="unit">°C</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Accelerometer</h2>
+      <div class="legend"><span style="--c: var(--x)">X</span><span style="--c: var(--y)">Y</span><span style="--c: var(--z)">Z</span></div>
+    </div>
+    <canvas id="accel"></canvas>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Gyroscope</h2>
+      <div class="legend"><span style="--c: var(--x)">X</span><span style="--c: var(--y)">Y</span><span style="--c: var(--z)">Z</span></div>
+    </div>
+    <canvas id="gyro"></canvas>
+  </section>
+
+  <section>
+    <h2>Log</h2>
+    <div class="row">
+      <a class="button" href="/api/imu/csv" download>Download CSV</a>
+    </div>
+    <div class="note">Every sample the chip sends is appended to the server's CSV log. Charts show the last 10 seconds.</div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const WINDOW_US = 10e6;     // chart width, 10 s of chip time
+const POLL_MS = 250;
+const ONLINE_MS = 2000;     // the chip uploads every 500 ms
+const CHARTS = [
+  { canvas: $('accel'), keys: ['ax', 'ay', 'az'], unit: 'g', minRange: 1.5 },
+  { canvas: $('gyro'), keys: ['gx', 'gy', 'gz'], unit: '°/s', minRange: 50 },
+];
+
+let samples = [];   // last WINDOW_US of samples, oldest first
+let since = null;   // sequence number of the next sample to fetch
+
+function setStatus(cls, text) {
+  $('status').className = cls;
+  $('status').textContent = text;
+}
+
+function add(list) {
+  for (const s of list) {
+    // Chip time went backwards: it rebooted, start the charts over
+    if (samples.length && s.t_us < samples[samples.length - 1].t_us) samples = [];
+    samples.push(s);
+  }
+  if (!samples.length) return;
+  const cutoff = samples[samples.length - 1].t_us - WINDOW_US;
+  const first = samples.findIndex(s => s.t_us >= cutoff);
+  if (first > 0) samples.splice(0, first);
+}
+
+function showStatus(d) {
+  if (d.age_ms === null) setStatus('', 'waiting for chip…');
+  else if (d.age_ms < ONLINE_MS) setStatus('ok', 'chip online');
+  else setStatus('bad', `no data for ${Math.round(d.age_ms / 1000)} s`);
+
+  let stats = `${d.total.toLocaleString()} samples received`;
+  if (samples.length > 1) {
+    const span = (samples[samples.length - 1].t_us - samples[0].t_us) / 1e6;
+    stats += ` · ${Math.round((samples.length - 1) / span)} Hz`;
+  }
+  $('stats').textContent = stats;
+}
+
+function showValues() {
+  const s = samples[samples.length - 1];
+  if (!s) return;
+  for (const k of ['ax', 'ay', 'az']) $(k).textContent = s[k].toFixed(3);
+  for (const k of ['gx', 'gy', 'gz']) $(k).textContent = s[k].toFixed(1);
+  $('amag').textContent = Math.hypot(s.ax, s.ay, s.az).toFixed(3);
+  $('temp').textContent = s.temp_c.toFixed(1);
+}
+
+// Round up to 1, 2 or 5 times a power of ten so the scale doesn't jitter
+function niceCeil(v) {
+  const p = 10 ** Math.floor(Math.log10(v));
+  return [1, 2, 5, 10].find(m => v <= m * p) * p;
+}
+
+function drawChart({ canvas, keys, unit, minRange }) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+
+  let range = minRange;
+  for (const s of samples) for (const k of keys) range = Math.max(range, Math.abs(s[k]));
+  range = niceCeil(range);
+
+  const pad = 6;
+  const y = v => h / 2 - v / range * (h / 2 - pad);
+
+  // Zero line and half-range guides
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = color('--border');
+  for (const v of [-range / 2, 0, range / 2]) {
+    ctx.setLineDash(v === 0 ? [] : [4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, Math.round(y(v)) + 0.5);
+    ctx.lineTo(w, Math.round(y(v)) + 0.5);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  if (samples.length > 1) {
+    const newest = samples[samples.length - 1].t_us;
+    const x = t => w - (newest - t) / WINDOW_US * w;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ['--x', '--y', '--z'].forEach((c, i) => {
+      ctx.strokeStyle = color(c);
+      ctx.beginPath();
+      samples.forEach((s, j) => {
+        const px = x(s.t_us), py = y(s[keys[i]]);
+        j ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      });
+      ctx.stroke();
+    });
+  }
+
+  ctx.fillStyle = color('--muted');
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`+${range} ${unit}`, 6, 4);
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`−${range} ${unit}`, 6, h - 4);
+  ctx.textAlign = 'right';
+  ctx.fillText('now', w - 6, h - 4);
+  ctx.textAlign = 'left';
+}
+
+function render() {
+  showValues();
+  CHARTS.forEach(drawChart);
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/api/imu' + (since === null ? '' : '?since=' + since));
+    if (!res.ok) throw new Error(res.statusText);
+    const d = await res.json();
+    // Fewer samples than we already saw: the server restarted
+    if (since !== null && d.total < since) samples = [];
+    add(d.samples);
+    since = d.total;
+    showStatus(d);
+    render();
+  } catch (e) {
+    setStatus('bad', 'server unreachable');
+  }
+  setTimeout(poll, POLL_MS);
+}
+
+window.addEventListener('resize', () => CHARTS.forEach(drawChart));
+render();
+poll();
+</script>
+</body>
+</html>

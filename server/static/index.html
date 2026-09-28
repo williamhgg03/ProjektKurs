@@ -20,6 +20,10 @@
   h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted);
        text-transform: uppercase; letter-spacing: .05em; }
   header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  nav { display: flex; gap: 4px; }
+  nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border: 1px solid transparent; border-radius: 6px; }
+  nav a:hover { color: var(--text); }
+  nav a[aria-current] { color: var(--text); background: var(--panel); border-color: var(--border); }
   #status { color: var(--muted); font-size: 13px; }
   #status.ok::before { content: "● "; color: #3dd68c; }
   #status.bad::before { content: "● "; color: var(--danger); }
@@ -50,6 +54,7 @@
 </head>
 <body>
 <main>
+  <nav><a href="/" aria-current="page">LED strip</a><a href="/imu">IMU</a></nav>
   <header>
     <h1>LED Strip Control</h1>
     <span id="status">connecting…</span>
