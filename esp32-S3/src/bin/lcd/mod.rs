@@ -1,16 +1,23 @@
 pub mod display;
 
-use embassy_time::{Duration, Timer};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
 
-use crate::lcd::display::Lcd;
+pub static TOUCH_SIGNAL: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 
 #[embassy_executor::task]
-pub async fn display_task(mut lcd: Lcd) {
+pub async fn display_task(mut lcd: display::Lcd) {
     lcd.init();
 
-    loop {
-        lcd.draw_test_pattern();
+    lcd.fill_red();
 
-        Timer::after(Duration::from_secs(1)).await;
+    loop {
+        let touching = TOUCH_SIGNAL.wait().await;
+
+        if touching {
+            lcd.fill_blue();
+        } else {
+            lcd.fill_red();
+        }
     }
 }

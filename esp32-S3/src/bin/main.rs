@@ -17,6 +17,7 @@ extern crate alloc;
 
 mod system;
 mod lcd;
+mod touch;
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
@@ -53,10 +54,22 @@ async fn main(spawner: Spawner) -> ! {
         m_Peripherals.GPIO10,
     );
 
+    let touch = touch::touch::Touch::new(
+        m_Peripherals.I2C0,
+        m_Peripherals.GPIO6,
+        m_Peripherals.GPIO7,
+        m_Peripherals.GPIO13,
+    );
+
     // TODO: Spawn some tasks
     spawner
         .spawn(lcd::display_task(lcd)
         .expect("Failed to spawn LCD task")
+    );
+
+    spawner.spawn(
+        touch::touch_task(touch)
+            .expect("Failed to create touch task"),
     );
 
     info!("LCD task spawned");

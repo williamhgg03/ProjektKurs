@@ -124,7 +124,7 @@ impl Lcd {
             .expect("LCD initialization failed");
     }
 
-    pub fn draw_test_pattern(&mut self) {
+    pub fn fill_red(&mut self) {
         self.display
             .set_draw_area((0, 0), (239, 239))
             .expect("Failed to set LCD draw area");
@@ -139,7 +139,26 @@ impl Lcd {
         for _ in 0..1800 {
             self.display
                 .draw_buffer(&buffer)
-                .expect("Failed to draw to LCD");
+                .expect("Failed to draw red screen");
+        }
+    }
+
+    pub fn fill_blue(&mut self) {
+        self.display
+            .set_draw_area((0, 0), (239, 239))
+            .expect("Failed to set LCD draw area");
+
+        self.display
+            .set_write_mode()
+            .expect("Failed to set LCD write mode");
+
+        // RGB565 blue
+        let buffer = [0x001Fu16; 32];
+
+        for _ in 0..1800 {
+            self.display
+                .draw_buffer(&buffer)
+                .expect("Failed to draw blue screen");
         }
     }
 }
