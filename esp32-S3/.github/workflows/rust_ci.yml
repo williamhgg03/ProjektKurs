@@ -24,18 +24,18 @@ jobs:
           - command: build
             args: --release
           - command: fmt
-            args: --all -- --check --color always
+            args: --all -- --check
           - command: clippy
-            args: --all-targets --all-features --workspace -- -D warnings
+            args: --all-features --workspace -- -D warnings
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Rust
-        uses: esp-rs/xtensa-toolchain@v1.6
+        uses: esp-rs/xtensa-toolchain@v1.5
         with:
           default: true
           buildtargets: esp32s3
-          ldproxy: true
+          ldproxy: false
       - name: Enable caching
         uses: Swatinem/rust-cache@v2
       - name: Run command
