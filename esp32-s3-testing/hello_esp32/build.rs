@@ -6,6 +6,9 @@ use std::collections::HashMap;
 
 const SECRETS_FILE: &str = "wifi.env";
 const KEYS: [&str; 3] = ["WIFI_SSID", "WIFI_PASS", "SERVER_URL"];
+/// Only needed for WPA2-Enterprise networks such as eduroam. Setting
+/// `WIFI_EAP_USERNAME` switches the firmware to enterprise mode.
+const OPTIONAL_KEYS: [&str; 2] = ["WIFI_EAP_USERNAME", "WIFI_EAP_IDENTITY"];
 
 fn main() {
     embuild::espidf::sysenv::output();
@@ -29,6 +32,14 @@ fn main() {
             value
         };
         println!("cargo:rustc-env={key}={value}");
+    }
+
+    for key in OPTIONAL_KEYS {
+        println!("cargo:rerun-if-env-changed={key}");
+        let value = std::env::var(key).ok().or_else(|| file.get(key).cloned());
+        if let Some(value) = value.filter(|v| !v.is_empty()) {
+            println!("cargo:rustc-env={key}={value}");
+        }
     }
 }
 

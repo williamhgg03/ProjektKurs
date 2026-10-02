@@ -13,8 +13,8 @@ use esp_idf_svc::hal::units::Hertz;
 use esp_idf_svc::http::client::{Configuration as HttpConfiguration, EspHttpConnection};
 use esp_idf_svc::http::Method;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
-use esp_idf_svc::sys::EspError;
-use esp_idf_svc::wifi::{BlockingWifi, ClientConfiguration, Configuration, EspWifi};
+use esp_idf_svc::sys::{self, esp, EspError};
+use esp_idf_svc::wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi};
 use serde::Deserialize;
 
 use crate::led_driver::{LedStrip, Rgb};
@@ -24,6 +24,9 @@ use crate::mpu6050::Mpu6050;
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
 const SERVER_URL: &str = env!("SERVER_URL");
+// Only set for WPA2-Enterprise networks (eduroam); unset means normal WPA2-Personal
+const WIFI_EAP_USERNAME: Option<&str> = option_env!("WIFI_EAP_USERNAME");
+const WIFI_EAP_IDENTITY: Option<&str> = option_env!("WIFI_EAP_IDENTITY");
 
 /// The server holds a long-poll open for up to 25s, so this must be longer.
 const HTTP_TIMEOUT: Duration = Duration::from_secs(35);
@@ -49,7 +52,7 @@ fn main() -> anyhow::Result<()> {
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
-    let mut strip = LedStrip::new(peripherals.pins.gpio0)?;
+    let mut strip = LedStrip::new(peripherals.pins.gpio1)?;
 
     // MPU-6050 wiring: SDA, SCL and INT (data ready). Change the pins here.
     let imu = init_imu(
@@ -117,23 +120,49 @@ fn init_imu(
 }
 
 fn connect_wifi(wifi: &mut BlockingWifi<EspWifi<'static>>) -> anyhow::Result<()> {
-    wifi.set_configuration(&Configuration::Client(ClientConfiguration {
-        ssid: WIFI_SSID
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("SSID too long"))?,
-        password: WIFI_PASS
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("password too long"))?,
-        ..Default::default()
-    }))?;
+    let ssid = WIFI_SSID
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("SSID too long"))?;
+
+    if let Some(username) = WIFI_EAP_USERNAME {
+        wifi.set_configuration(&Configuration::Client(ClientConfiguration {
+            ssid,
+            auth_method: AuthMethod::WPA2Enterprise,
+            ..Default::default()
+        }))?;
+        enable_enterprise(WIFI_EAP_IDENTITY.unwrap_or(username), username, WIFI_PASS)?;
+        log::info!("Connecting to WiFi (WPA2-Enterprise)...");
+    } else {
+        wifi.set_configuration(&Configuration::Client(ClientConfiguration {
+            ssid,
+            password: WIFI_PASS
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("password too long"))?,
+            ..Default::default()
+        }))?;
+        log::info!("Connecting to WiFi (WPA2-Personal)...");
+    }
 
     wifi.start()?;
-    log::info!("Connecting to WiFi...");
     wifi.connect()?;
     wifi.wait_netif_up()?;
 
     let ip = wifi.wifi().sta_netif().get_ip_info()?;
     log::info!("Connected, IP: {}", ip.ip);
+    Ok(())
+}
+
+/// Sets up 802.1X (PEAP/TTLS with MSCHAPv2) credentials for networks like eduroam.
+/// No CA cert is set, so the RADIUS server's certificate is not verified; add
+/// `esp_eap_client_set_ca_cert` with the institution's CA to enable that.
+fn enable_enterprise(identity: &str, username: &str, password: &str) -> anyhow::Result<()> {
+    // ESP-IDF copies the buffers, so they only need to live for the call
+    unsafe {
+        esp!(sys::esp_eap_client_set_identity(identity.as_ptr(), identity.len() as _))?;
+        esp!(sys::esp_eap_client_set_username(username.as_ptr(), username.len() as _))?;
+        esp!(sys::esp_eap_client_set_password(password.as_ptr(), password.len() as _))?;
+        esp!(sys::esp_wifi_sta_enterprise_enable())?;
+    }
     Ok(())
 }
 
