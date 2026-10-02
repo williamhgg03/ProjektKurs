@@ -26,6 +26,8 @@ const MAX_BATCH: usize = 100;
 const MAX_PENDING: usize = 1000;
 /// Data-ready fires every 10ms, not seeing it for this long means INT is not connected.
 const INT_TIMEOUT: Duration = Duration::from_millis(100);
+/// Fail a stuck POST quickly, while it blocks samples are only buffered by the channel.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const STACK_SIZE: usize = 8192;
 
 #[derive(Serialize)]
@@ -129,17 +131,11 @@ fn upload_loop(rx: Receiver<Sample>) {
     loop {
         thread::sleep(UPLOAD_INTERVAL);
 
-        pending.extend(rx.try_iter());
-        if pending.len() > MAX_PENDING {
-            let excess = pending.len() - MAX_PENDING;
-            pending.drain(..excess);
-            log::warn!("Server unreachable, dropped {excess} old IMU samples");
-        }
-
-        while !pending.is_empty() {
+        // Drain the channel before every batch, so it never fills up during a long upload round
+        while collect(&rx, &mut pending) {
             let conn = match &mut http {
                 Some(c) => c,
-                None => match crate::new_http() {
+                None => match crate::new_http(HTTP_TIMEOUT) {
                     Ok(c) => http.insert(c),
                     Err(e) => {
                         log::error!("Creating HTTP connection failed: {e:?}");
@@ -163,6 +159,18 @@ fn upload_loop(rx: Receiver<Sample>) {
             }
         }
     }
+}
+
+/// Move new samples from the channel into `pending`, dropping the oldest beyond
+/// `MAX_PENDING`. Returns whether there is anything to upload.
+fn collect(rx: &Receiver<Sample>, pending: &mut Vec<Sample>) -> bool {
+    pending.extend(rx.try_iter());
+    if pending.len() > MAX_PENDING {
+        let excess = pending.len() - MAX_PENDING;
+        pending.drain(..excess);
+        log::warn!("Server unreachable, dropped {excess} old IMU samples");
+    }
+    !pending.is_empty()
 }
 
 fn post_batch(http: &mut EspHttpConnection, url: &str, samples: &[Sample]) -> anyhow::Result<()> {

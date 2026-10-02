@@ -29,7 +29,7 @@ const WIFI_EAP_USERNAME: Option<&str> = option_env!("WIFI_EAP_USERNAME");
 const WIFI_EAP_IDENTITY: Option<&str> = option_env!("WIFI_EAP_IDENTITY");
 
 /// The server holds a long-poll open for up to 25s, so this must be longer.
-const HTTP_TIMEOUT: Duration = Duration::from_secs(35);
+const LED_HTTP_TIMEOUT: Duration = Duration::from_secs(35);
 const RETRY_DELAY: Duration = Duration::from_secs(2);
 /// MPU-6050 maximum I2C clock.
 const I2C_BAUDRATE: Hertz = Hertz(400_000);
@@ -77,7 +77,7 @@ fn main() -> anyhow::Result<()> {
         Err(e) => log::error!("MPU-6050 not available, IMU logging disabled: {e:?}"),
     }
 
-    let mut http = new_http()?;
+    let mut http = new_http(LED_HTTP_TIMEOUT)?;
     let mut since: Option<u64> = None;
 
     log::info!("Polling {SERVER_URL}/device/led");
@@ -105,7 +105,7 @@ fn main() -> anyhow::Result<()> {
                 log::warn!("Fetching frame failed: {e:?}");
                 since = None;
                 // The connection may be left mid-request, start over with a fresh one
-                http = new_http()?;
+                http = new_http(LED_HTTP_TIMEOUT)?;
                 thread::sleep(RETRY_DELAY);
             }
         }
@@ -144,6 +144,8 @@ fn connect_wifi(wifi: &mut BlockingWifi<EspWifi<'static>>) -> anyhow::Result<()>
     }
 
     wifi.start()?;
+    // Modem sleep adds 100-300ms latency per exchange, enough to make the IMU upload fall behind
+    esp!(unsafe { sys::esp_wifi_set_ps(sys::wifi_ps_type_t_WIFI_PS_NONE) })?;
     wifi.connect()?;
     wifi.wait_netif_up()?;
 
@@ -166,9 +168,9 @@ fn enable_enterprise(identity: &str, username: &str, password: &str) -> anyhow::
     Ok(())
 }
 
-fn new_http() -> anyhow::Result<EspHttpConnection> {
+fn new_http(timeout: Duration) -> anyhow::Result<EspHttpConnection> {
     Ok(EspHttpConnection::new(&HttpConfiguration {
-        timeout: Some(HTTP_TIMEOUT),
+        timeout: Some(timeout),
         ..Default::default()
     })?)
 }
