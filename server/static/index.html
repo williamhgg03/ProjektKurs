@@ -82,6 +82,20 @@
     <div id="preview" class="strip"></div>
     <div class="note">What the chip receives from <code>/device/led</code>, with brightness applied.</div>
   </section>
+
+  <section>
+    <h2>Buzzer</h2>
+    <div class="row">
+      <input id="song" type="file" accept="audio/*">
+      <label>Octave shift <input id="octave" type="number" min="0" max="3" value="1"></label>
+      <button id="upload" class="primary">Upload</button>
+      <button id="play">Play</button>
+      <button id="stop" class="danger">Stop</button>
+      <button id="listen">Preview here</button>
+    </div>
+    <div id="melodyInfo" class="note">No song uploaded.</div>
+    <div id="melodyNote" class="note">Upload an MP3 (or WAV/OGG/FLAC). The server guesses its main melody and the chip beeps it on GPIO2. Raise the octave shift if it sounds quiet.</div>
+  </section>
 </main>
 
 <script>
@@ -229,7 +243,107 @@ async function pollLoop() {
   }
 }
 
+// Buzzer
+let melody = null;      // last MelodyState from the server
+let previewCtx = null;  // AudioContext while previewing in the browser
+
+function melodyNote(msg, isErr = false) {
+  const el = $('melodyNote');
+  el.textContent = msg;
+  el.classList.toggle('err', isErr);
+}
+
+const fmtTime = ms => Math.floor(ms / 60000) + ':' + String(Math.floor(ms / 1000) % 60).padStart(2, '0');
+
+function applyMelody(m) {
+  melody = m;
+  if (!m.notes.length) {
+    $('melodyInfo').textContent = 'No song uploaded.';
+    return;
+  }
+  const ms = m.notes.reduce((sum, n) => sum + n.ms, 0);
+  const parts = [m.name || 'song', m.notes.length + ' notes', fmtTime(ms)];
+  if (m.truncated) parts.push('truncated');
+  parts.push(m.playing ? 'playing' : 'stopped');
+  $('melodyInfo').textContent = parts.join(' · ');
+}
+
+async function melodyRun(action, okMsg) {
+  try {
+    applyMelody(await action());
+    if (okMsg) melodyNote(okMsg);
+  } catch (e) {
+    melodyNote(e.message, true);
+  }
+}
+
+$('upload').addEventListener('click', () => {
+  const file = $('song').files[0];
+  if (!file) return melodyNote('Choose an audio file first.', true);
+  melodyNote('Converting…');
+  const params = new URLSearchParams({ octave: $('octave').value, name: file.name });
+  // Raw file as the body, not JSON
+  melodyRun(async () => {
+    const res = await fetch('/api/melody?' + params, { method: 'POST', body: file });
+    if (!res.ok) throw new Error(await res.text() || res.statusText);
+    return res.json();
+  }, 'Uploaded, the chip starts playing.');
+});
+$('play').addEventListener('click', () => {
+  melodyRun(() => api('POST', '/api/melody/play'), 'Playing from the start.');
+});
+$('stop').addEventListener('click', () => {
+  melodyRun(() => api('POST', '/api/melody/stop'), 'Stopped.');
+});
+
+function stopPreview() {
+  if (previewCtx) previewCtx.close();
+  previewCtx = null;
+  $('listen').textContent = 'Preview here';
+}
+
+// Square waves in the browser, roughly what the piezo will play
+$('listen').addEventListener('click', () => {
+  if (previewCtx) return stopPreview();
+  if (!melody || !melody.notes.length) return melodyNote('Upload a song first.', true);
+  const ctx = previewCtx = new AudioContext();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'square';
+  osc.connect(gain).connect(ctx.destination);
+  const start = ctx.currentTime + 0.05;
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  let t = start;
+  for (const n of melody.notes) {
+    if (n.freq) osc.frequency.setValueAtTime(n.freq, t);
+    gain.gain.setValueAtTime(n.freq ? 0.05 : 0, t);
+    t += n.ms / 1000;
+  }
+  osc.start(start);
+  osc.stop(t);
+  osc.onended = () => { if (previewCtx === ctx) stopPreview(); };
+  $('listen').textContent = 'Stop preview';
+});
+
+// Follow melody changes made from any browser, same long-poll as the chip
+async function melodyLoop() {
+  let since = null;
+  for (;;) {
+    try {
+      const m = await api('GET', '/device/melody' + (since === null ? '' : '?since=' + since));
+      if (m.version !== since) {
+        since = m.version;
+        applyMelody(await api('GET', '/api/melody'));
+      }
+    } catch (e) {
+      since = null;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+}
+
 pollLoop();
+melodyLoop();
 </script>
 </body>
 </html>

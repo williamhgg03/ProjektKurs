@@ -35,3 +35,13 @@ Credentials go in `wifi.env` (copy `wifi.env.example`). It selects the network t
 Rebuild after changing `wifi.env`. The RADIUS server certificate is not verified.
 On eduroam, other devices (e.g. the laptop running `server/`) may not be reachable
 from the chip, so `SERVER_URL` might need to point at a public server.
+
+## Buzzer
+
+A passive piezo buzzer on GPIO2 plays melodies uploaded in the server's web UI
+(Buzzer section). The server turns the MP3 (or WAV/OGG/FLAC) into a list of notes
+and the chip plays them as square waves with LEDC, while the LED loop keeps running.
+
+Wiring: GPIO2 → ~100 Ω → piezo +, piezo − → GND. A 3-pin passive buzzer module
+goes S → GPIO2, plus 3V3 and GND. An active buzzer (one that beeps on plain DC)
+will not work.

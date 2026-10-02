@@ -1,4 +1,5 @@
 mod led;
+mod melody;
 mod routes;
 
 use std::net::SocketAddr;
@@ -7,6 +8,8 @@ use std::sync::Arc;
 use tokio::sync::watch;
 
 use crate::led::LedState;
+use crate::melody::MelodyState;
+use crate::routes::Shared;
 
 #[tokio::main]
 async fn main() {
@@ -19,7 +22,10 @@ async fn main() {
         .unwrap_or(80);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
-    let state = Arc::new(watch::Sender::new(LedState::default()));
+    let state = Arc::new(Shared {
+        led: watch::Sender::new(LedState::default()),
+        melody: watch::Sender::new(MelodyState::default()),
+    });
     let app = routes::router(state);
 
     let listener = match tokio::net::TcpListener::bind(addr).await {
