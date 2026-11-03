@@ -1,0 +1,54 @@
+% Latex packages, global settings, stuff & things
+
+% Fonts & encoding
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{csquotes}
+
+% Page layout
+\usepackage[margin=2.5cm]{geometry}
+
+% Math
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% Figures & tables
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{xcolor}
+
+% Code listings
+\usepackage{listings}
+\lstdefinelanguage{Rust}{
+  morekeywords={as,break,const,continue,crate,else,enum,extern,false,fn,for,
+    if,impl,in,let,loop,match,mod,move,mut,pub,ref,return,self,Self,static,
+    struct,super,trait,true,type,unsafe,use,where,while,async,await,dyn},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+}
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{green!45!black},
+  stringstyle=\color{red!60!black},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  frame=single,
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=4,
+}
+
+% Bibliography
+\usepackage[backend=biber,style=ieee]{biblatex}
+\addbibresource{bib/references.bib}
+
+% Links & cross-references (keep these last)
+\usepackage[hidelinks]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
