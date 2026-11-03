@@ -1,4 +1,4 @@
-mod led_driver;
+mod motor_driver;
 
 use std::thread;
 use std::time::Duration;
@@ -12,7 +12,7 @@ use esp_idf_svc::sys::{self, esp};
 use esp_idf_svc::wifi::{AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi};
 use serde::Deserialize;
 
-use crate::led_driver::{LedStrip, Rgb};
+use crate::motor_driver::{Channel, Motor, Tb6612};
 
 // Injected by build.rs from wifi.env or the environment, never stored in source
 const WIFI_SSID: &str = env!("WIFI_SSID");
@@ -22,15 +22,18 @@ const SERVER_URL: &str = env!("SERVER_URL");
 const WIFI_EAP_USERNAME: Option<&str> = option_env!("WIFI_EAP_USERNAME");
 const WIFI_EAP_IDENTITY: Option<&str> = option_env!("WIFI_EAP_IDENTITY");
 
-/// The server holds a long-poll open for up to 25s, so this must be longer.
-const HTTP_TIMEOUT: Duration = Duration::from_secs(35);
+/// The server holds a long-poll open for up to 10s, so this must be longer. It
+/// also bounds how long the motors keep running after the network silently drops.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(15);
 const RETRY_DELAY: Duration = Duration::from_secs(2);
 
-/// Response of the server's `GET /device/led`.
+/// Response of the server's `GET /device/motors`.
 #[derive(Deserialize)]
-struct DeviceFrame {
+struct DeviceState {
     version: u64,
-    leds: Vec<Rgb>,
+    enabled: bool,
+    a: Motor,
+    b: Motor,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -44,7 +47,24 @@ fn main() -> anyhow::Result<()> {
     let sysloop = EspSystemEventLoop::take()?;
     let nvs = EspDefaultNvsPartition::take()?;
 
-    let mut strip = LedStrip::new(peripherals.pins.gpio1)?;
+    // Arduino Nano ESP32 pin labels -> ESP32-S3 GPIOs
+    let pins = peripherals.pins;
+    let timer = motor_driver::pwm_timer(peripherals.ledc.timer0)?;
+    let a = Channel::new(
+        peripherals.ledc.channel0,
+        &timer,
+        pins.gpio1,  // PWMA = A0
+        pins.gpio14, // AIN1 = A7
+        pins.gpio4,  // AIN2 = A3
+    )?;
+    let b = Channel::new(
+        peripherals.ledc.channel1,
+        &timer,
+        pins.gpio2,  // PWMB = A1
+        pins.gpio12, // BIN1 = A5
+        pins.gpio13, // BIN2 = A6
+    )?;
+    let mut motors = Tb6612::new(timer, pins.gpio11 /* STBY = A4 */, a, b)?;
 
     let mut wifi = BlockingWifi::wrap(
         EspWifi::new(peripherals.modem, sysloop.clone(), Some(nvs))?,
@@ -55,10 +75,11 @@ fn main() -> anyhow::Result<()> {
     let mut http = new_http()?;
     let mut since: Option<u64> = None;
 
-    log::info!("Polling {SERVER_URL}/device/led");
+    log::info!("Polling {SERVER_URL}/device/motors");
     loop {
         if !wifi.is_connected().unwrap_or(false) {
-            log::warn!("WiFi lost, reconnecting");
+            log::warn!("WiFi lost, stopping motors and reconnecting");
+            failsafe(&mut motors);
             if let Err(e) = wifi.connect().and_then(|_| wifi.wait_netif_up()) {
                 log::error!("Reconnect failed: {e}");
                 thread::sleep(RETRY_DELAY);
@@ -66,24 +87,35 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        match fetch_frame(&mut http, since) {
-            Ok(frame) => {
-                if since != Some(frame.version) {
-                    log::info!("Frame v{} ({} LEDs)", frame.version, frame.leds.len());
-                    if let Err(e) = strip.write(&frame.leds) {
-                        log::error!("LED write failed: {e}");
+        match fetch_state(&mut http, since) {
+            Ok(state) => {
+                if since != Some(state.version) {
+                    log::info!(
+                        "State v{}: enabled={} A={:?} B={:?}",
+                        state.version, state.enabled, state.a, state.b
+                    );
+                    if let Err(e) = motors.set(state.enabled, state.a, state.b) {
+                        log::error!("Motor update failed: {e}");
                     }
                 }
-                since = Some(frame.version);
+                since = Some(state.version);
             }
             Err(e) => {
-                log::warn!("Fetching frame failed: {e:?}");
+                log::warn!("Fetching state failed, stopping motors: {e:?}");
+                failsafe(&mut motors);
                 since = None;
                 // The connection may be left mid-request, start over with a fresh one
                 http = new_http()?;
                 thread::sleep(RETRY_DELAY);
             }
         }
+    }
+}
+
+/// Never keep driving blind: stop whenever the server can't tell us what to do.
+fn failsafe(motors: &mut Tb6612) {
+    if let Err(e) = motors.stop() {
+        log::error!("Stopping motors failed: {e}");
     }
 }
 
@@ -141,12 +173,12 @@ fn new_http() -> anyhow::Result<EspHttpConnection> {
     })?)
 }
 
-/// GET the current frame. With `since` set the server waits until the frame
-/// changes (or its long-poll timeout passes) before answering.
-fn fetch_frame(http: &mut EspHttpConnection, since: Option<u64>) -> anyhow::Result<DeviceFrame> {
+/// GET the current motor state. With `since` set the server waits until the
+/// state changes (or its long-poll timeout passes) before answering.
+fn fetch_state(http: &mut EspHttpConnection, since: Option<u64>) -> anyhow::Result<DeviceState> {
     let url = match since {
-        Some(v) => format!("{SERVER_URL}/device/led?since={v}"),
-        None => format!("{SERVER_URL}/device/led"),
+        Some(v) => format!("{SERVER_URL}/device/motors?since={v}"),
+        None => format!("{SERVER_URL}/device/motors"),
     };
 
     http.initiate_request(Method::Get, &url, &[("accept", "application/json")])?;

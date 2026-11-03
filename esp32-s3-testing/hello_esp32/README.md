@@ -1,6 +1,23 @@
 # WIFI_test_esp32
 
-Rust (std, ESP-IDF v5.5.3) firmware for the ESP32-S3.
+Rust (std, ESP-IDF v5.5.3) firmware for an Arduino Nano ESP32 (ESP32-S3) that drives two
+DC motors through a TB6612FNG driver. It long-polls `server/` for the motor state set on
+the website and stops both motors (STBY low) whenever the server can't be reached.
+
+## Wiring
+
+| TB6612 | Nano ESP32 | GPIO   |
+|--------|------------|--------|
+| PWMA   | A0         | GPIO1  |
+| AIN1   | A7         | GPIO14 |
+| AIN2   | A3         | GPIO4  |
+| PWMB   | A1         | GPIO2  |
+| BIN1   | A5         | GPIO12 |
+| BIN2   | A6         | GPIO13 |
+| STBY   | A4         | GPIO11 |
+
+The pins are set in `main.rs`. If a motor spins the wrong way, swap its IN1/IN2 pins
+there (or swap the motor's wires). PWM runs at 20 kHz.
 
 ## One-time setup
 

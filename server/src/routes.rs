@@ -5,32 +5,29 @@ use std::time::Duration;
 use axum::extract::{ConnectInfo, Query, Request, State};
 use axum::http::StatusCode;
 use axum::response::Html;
-use axum::routing::{get, post, put};
+use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::sync::watch;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
-use crate::led::{ConfigUpdate, LedError, LedState, Rgb};
+use crate::motor::{MotorError, MotorState, StateUpdate};
 
 /// The watch channel holds the state itself, so every change wakes long-polling clients.
-pub type AppState = Arc<watch::Sender<LedState>>;
+pub type AppState = Arc<watch::Sender<MotorState>>;
 
-/// How long `/device/led?since=` waits for a change before answering anyway.
-const LONG_POLL: Duration = Duration::from_secs(25);
+/// How long `/device/motors?since=` waits for a change before answering anyway.
+const LONG_POLL: Duration = Duration::from_secs(10);
 
-type ApiResult = Result<Json<LedState>, (StatusCode, String)>;
+type ApiResult = Result<Json<MotorState>, (StatusCode, String)>;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(index))
-        .route("/api/led", get(get_led))
-        .route("/api/led/config", put(put_config))
-        .route("/api/led/frame", post(post_frame))
-        .route("/api/led/fill", post(post_fill))
-        .route("/api/led/off", post(post_off))
-        .route("/device/led", get(device_led))
+        .route("/api/motors", get(get_motors).put(put_motors))
+        .route("/api/motors/stop", post(post_stop))
+        .route("/device/motors", get(device_motors))
         .with_state(state)
         .layer(
             // One log line per request: method, path and client in the span, status and latency on response.
@@ -52,7 +49,7 @@ async fn index() -> Html<&'static str> {
 }
 
 /// Apply a change and notify waiters only if it succeeded.
-fn update(state: &AppState, f: impl FnOnce(&mut LedState) -> Result<(), LedError>) -> ApiResult {
+fn update(state: &AppState, f: impl FnOnce(&mut MotorState) -> Result<(), MotorError>) -> ApiResult {
     let mut result = Ok(());
     state.send_if_modified(|s| {
         result = f(s);
@@ -67,33 +64,17 @@ fn update(state: &AppState, f: impl FnOnce(&mut LedState) -> Result<(), LedError
     Ok(Json(s))
 }
 
-async fn get_led(State(state): State<AppState>) -> Json<LedState> {
+async fn get_motors(State(state): State<AppState>) -> Json<MotorState> {
     Json(state.borrow().clone())
 }
 
-async fn put_config(State(state): State<AppState>, Json(body): Json<ConfigUpdate>) -> ApiResult {
-    update(&state, |s| s.apply_config(body))
+async fn put_motors(State(state): State<AppState>, Json(body): Json<StateUpdate>) -> ApiResult {
+    update(&state, |s| s.apply(body))
 }
 
-#[derive(Deserialize)]
-struct FrameBody {
-    leds: Vec<Rgb>,
-}
-
-async fn post_frame(State(state): State<AppState>, Json(body): Json<FrameBody>) -> ApiResult {
-    update(&state, |s| s.set_frame(body.leds))
-}
-
-async fn post_fill(State(state): State<AppState>, Json(color): Json<Rgb>) -> ApiResult {
+async fn post_stop(State(state): State<AppState>) -> ApiResult {
     update(&state, |s| {
-        s.fill(color);
-        Ok(())
-    })
-}
-
-async fn post_off(State(state): State<AppState>) -> ApiResult {
-    update(&state, |s| {
-        s.fill(Rgb::OFF);
+        s.stop();
         Ok(())
     })
 }
@@ -103,23 +84,14 @@ struct DeviceQuery {
     since: Option<u64>,
 }
 
-#[derive(Serialize)]
-struct DeviceFrame {
-    version: u64,
-    leds: Vec<Rgb>,
-}
-
 /// Chip-facing endpoint. With `since` equal to the current version it blocks
 /// until the state changes (or LONG_POLL passes), otherwise it answers at once.
-async fn device_led(State(state): State<AppState>, Query(q): Query<DeviceQuery>) -> Json<DeviceFrame> {
+async fn device_motors(State(state): State<AppState>, Query(q): Query<DeviceQuery>) -> Json<MotorState> {
     let mut rx = state.subscribe();
     let current = rx.borrow_and_update().version;
     if q.since == Some(current) {
         let _ = tokio::time::timeout(LONG_POLL, rx.changed()).await;
     }
-    let s = rx.borrow();
-    Json(DeviceFrame {
-        version: s.version,
-        leds: s.output_frame(),
-    })
+    let s = rx.borrow().clone();
+    Json(s)
 }
