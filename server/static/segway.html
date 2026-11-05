@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segway Control</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --border: #2d313a;
+    --text: #e6e8eb; --muted: #8b919c; --accent: #4f8cff; --danger: #e5484d; --ok: #3dd68c;
+    --a: #4f8cff; --b: #f5a524; --c: #3dd68c;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; display: grid; gap: 16px; }
+  h1 { margin: 0; font-size: 20px; }
+  h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted);
+       text-transform: uppercase; letter-spacing: .05em; }
+  nav { display: flex; gap: 4px; }
+  nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border: 1px solid transparent; border-radius: 6px; }
+  nav a:hover { color: var(--text); }
+  nav a[aria-current] { color: var(--text); background: var(--panel); border-color: var(--border); }
+  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  #status { color: var(--muted); font-size: 13px; }
+  #status.ok::before { content: "● "; color: var(--ok); }
+  #status.bad::before { content: "● "; color: var(--danger); }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  .head h2 { margin-bottom: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+  label { display: flex; gap: 8px; align-items: center; color: var(--muted); }
+  input, button {
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  }
+  input[type=number] { width: 90px; }
+  input[type=range] { padding: 0; flex: 1; }
+  button { cursor: pointer; touch-action: none; user-select: none; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.stop { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; flex: 1; padding: 12px; }
+  button.big { flex: 1; padding: 12px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 6px; }
+  .pad button { font-size: 20px; padding: 0; }
+  .pad button.active { background: var(--accent); border-color: var(--accent); }
+  .sliders { display: grid; gap: 8px; flex: 1; min-width: 200px; }
+  .sliders output { width: 48px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+  .tune { display: grid; grid-template-columns: auto auto; gap: 8px 12px; align-items: center; justify-content: start; }
+  .tune span { color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  @media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .tile .label { color: var(--muted); font-size: 12px; }
+  .tile .value { font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tile .unit { color: var(--muted); font-size: 12px; margin-left: 2px; }
+  #mode.balancing { color: var(--ok); }
+  #mode.armed { color: var(--accent); }
+  #mode.fallen, #mode.fault { color: var(--danger); }
+  .legend { display: flex; gap: 12px; color: var(--muted); font-size: 12px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; border-radius: 2px;
+                         margin-right: 6px; vertical-align: middle; background: var(--c); }
+  canvas { display: block; width: 100%; height: 160px; background: var(--bg); border-radius: 6px; }
+  a.button {
+    color: var(--text); text-decoration: none; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  }
+  a.button:hover { border-color: var(--muted); }
+  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  #error { color: var(--danger); font-size: 13px; min-height: 1.5em; }
+</style>
+</head>
+<body>
+<main>
+  <nav><a href="/">LED strip</a><a href="/segway" aria-current="page">Segway</a></nav>
+  <header>
+    <h1>Segway</h1>
+    <span id="status">connecting…</span>
+  </header>
+
+  <section>
+    <h2>Motors</h2>
+    <div class="row">
+      <button id="enable" class="big">Enable motors</button>
+      <button id="stop" class="stop">STOP (space)</button>
+    </div>
+    <div class="note">After enabling, lift the robot upright: it starts balancing within 5° of the target and
+      stops by itself past 45°. STOP turns the motors off, so the robot falls.</div>
+    <div id="error"></div>
+  </section>
+
+  <div class="cols">
+    <section>
+      <h2>Drive</h2>
+      <div class="row">
+        <div class="pad">
+          <span></span><button data-dir="fwd" title="Forward (W / ↑)">▲</button><span></span>
+          <button data-dir="left" title="Left (A / ←)">◀</button><span></span><button data-dir="right" title="Right (D / →)">▶</button>
+          <span></span><button data-dir="back" title="Back (S / ↓)">▼</button><span></span>
+        </div>
+        <div class="sliders">
+          <label>Lean <input id="leanMax" type="range" min="0.5" max="10" step="0.5" value="3"><output id="leanOut"></output></label>
+          <label>Turn <input id="turnMax" type="range" min="0.02" max="0.3" step="0.02" value="0.1"><output id="turnOut"></output></label>
+        </div>
+      </div>
+      <div class="note">Hold a button or WASD / arrow keys. Driving stops 1 s after the page stops sending.</div>
+    </section>
+
+    <section>
+      <h2>Tuning</h2>
+      <form id="tune" class="tune">
+        <span>Trim (°)</span><input id="trim_deg" type="number" step="0.1" min="-10" max="10">
+        <span>Kp</span><input id="kp" type="number" step="any" min="0">
+        <span>Ki</span><input id="ki" type="number" step="any" min="0">
+        <span>Kd</span><input id="kd" type="number" step="any" min="0">
+        <span></span><button class="primary" type="submit">Apply</button>
+      </form>
+      <div id="active" class="note"></div>
+      <div class="note">Gains act on radians: Kp = 6 gives 10% duty at about 1° of error. Saved on the server.</div>
+    </section>
+  </div>
+
+  <section>
+    <div class="head">
+      <h2>Live</h2>
+      <span id="stats" class="note"></span>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="label">Mode</div><div class="value" id="mode">–</div></div>
+      <div class="tile"><div class="label">Pitch</div><div class="value"><span id="pitch">–</span><span class="unit">°</span></div></div>
+      <div class="tile"><div class="label">Target</div><div class="value"><span id="target">–</span><span class="unit">°</span></div></div>
+      <div class="tile"><div class="label">Pitch rate</div><div class="value"><span id="prate">–</span><span class="unit">°/s</span></div></div>
+      <div class="tile"><div class="label">Left duty</div><div class="value"><span id="uleft">–</span><span class="unit">%</span></div></div>
+      <div class="tile"><div class="label">Right duty</div><div class="value"><span id="uright">–</span><span class="unit">%</span></div></div>
+      <div class="tile"><div class="label">Loop time</div><div class="value"><span id="loop">–</span><span class="unit">µs</span></div></div>
+      <div class="tile"><div class="label">Server link</div><div class="value" id="link">–</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Angle</h2>
+      <div class="legend"><span style="--c: var(--a)">Pitch</span><span style="--c: var(--b)">Target</span></div>
+    </div>
+    <canvas id="angle"></canvas>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Rates</h2>
+      <div class="legend"><span style="--c: var(--a)">Pitch rate</span><span style="--c: var(--c)">Yaw rate</span></div>
+    </div>
+    <canvas id="rate"></canvas>
+  </section>
+
+  <section>
+    <div class="head">
+      <h2>Motor duty</h2>
+      <div class="legend"><span style="--c: var(--a)">Left</span><span style="--c: var(--c)">Right</span></div>
+    </div>
+    <canvas id="duty"></canvas>
+  </section>
+
+  <section>
+    <h2>Log</h2>
+    <div class="row">
+      <a class="button" href="/api/segway/telemetry.csv" download>Download CSV</a>
+    </div>
+    <div class="note">Every sample the robot sends (50 Hz, raw IMU included) is appended to the server's CSV log.
+      Charts show the last 10 seconds.</div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const WINDOW_US = 10e6;     // chart width, 10 s of robot time
+const POLL_MS = 250;
+const ONLINE_MS = 2000;     // the robot uploads every 250 ms
+const DRIVE_MS = 200;       // resend interval while driving, the server stops after 1 s
+const CHARTS = [
+  { canvas: $('angle'), series: [['pitch_deg', '--a'], ['target_deg', '--b']], unit: '°', minRange: 10 },
+  { canvas: $('rate'), series: [['pitch_rate_dps', '--a'], ['yaw_rate_dps', '--c']], unit: '°/s', minRange: 50 },
+  { canvas: $('duty'), series: [['u_left', '--a'], ['u_right', '--c']], unit: '', minRange: 1, fixed: true },
+];
+
+let cmd = null;     // latest command from the server
+let samples = [];   // last WINDOW_US of telemetry, oldest first
+let since = null;   // sequence number of the next sample to fetch
+
+// ---------------------------------------------------------------------------------------------
+// Commands
+
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body ? { 'content-type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(await res.text() || res.statusText);
+  return res.json();
+}
+
+async function send(method, url, body) {
+  try {
+    showCommand(await api(method, url, body));
+    $('error').textContent = '';
+  } catch (e) {
+    $('error').textContent = e.message;
+  }
+}
+
+function showCommand(c) {
+  const first = cmd === null;
+  cmd = c;
+  $('enable').textContent = c.enabled ? 'Disable motors' : 'Enable motors';
+  $('enable').classList.toggle('primary', !c.enabled);
+  const g = c.gains;
+  $('active').textContent = `Active: trim ${c.trim_deg}°, Kp ${g.kp}, Ki ${g.ki}, Kd ${g.kd} (v${c.version})`;
+  // Fill the form once, after that it belongs to the user until they press Apply
+  if (first) fillTuning(c);
+}
+
+function fillTuning(c) {
+  $('trim_deg').value = c.trim_deg;
+  $('kp').value = c.gains.kp;
+  $('ki').value = c.gains.ki;
+  $('kd').value = c.gains.kd;
+}
+
+$('enable').onclick = () => send('PUT', '/api/segway', { enabled: !(cmd && cmd.enabled) });
+$('stop').onclick = () => send('POST', '/api/segway/stop');
+
+$('tune').onsubmit = async e => {
+  e.preventDefault();
+  const num = id => parseFloat($(id).value);
+  await send('PUT', '/api/segway', { trim_deg: num('trim_deg'), kp: num('kp'), ki: num('ki'), kd: num('kd') });
+  if (cmd) fillTuning(cmd);
+};
+
+async function refreshCommand() {
+  try { showCommand(await api('GET', '/api/segway')); } catch (e) { /* status line shows it */ }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Driving: held directions, repeated every DRIVE_MS (the server's dead-man timeout stops it)
+
+const held = new Set();
+const KEYS = { ArrowUp: 'fwd', w: 'fwd', ArrowDown: 'back', s: 'back',
+               ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right' };
+let wasDriving = false;
+
+function showHeld() {
+  document.querySelectorAll('.pad button').forEach(b => b.classList.toggle('active', held.has(b.dataset.dir)));
+}
+
+function driveVector() {
+  const on = d => held.has(d) ? 1 : 0;
+  return {
+    lean_deg: (on('fwd') - on('back')) * parseFloat($('leanMax').value),
+    turn: (on('left') - on('right')) * parseFloat($('turnMax').value),
+  };
+}
+
+setInterval(() => {
+  const v = driveVector();
+  const driving = v.lean_deg !== 0 || v.turn !== 0;
+  // Keep sending while driving, then once more with zeros
+  if (driving || wasDriving) send('POST', '/api/segway/drive', v);
+  wasDriving = driving;
+}, DRIVE_MS);
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    $('stop').click();
+    return;
+  }
+  const dir = KEYS[e.key];
+  if (dir) { e.preventDefault(); held.add(dir); showHeld(); }
+});
+document.addEventListener('keyup', e => {
+  const dir = KEYS[e.key];
+  if (dir) { held.delete(dir); showHeld(); }
+});
+window.addEventListener('blur', () => { held.clear(); showHeld(); });
+
+document.querySelectorAll('.pad button').forEach(b => {
+  b.addEventListener('pointerdown', e => { b.setPointerCapture(e.pointerId); held.add(b.dataset.dir); showHeld(); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    b.addEventListener(ev, () => { held.delete(b.dataset.dir); showHeld(); });
+  }
+});
+
+for (const [input, out, fmt] of [['leanMax', 'leanOut', v => v + '°'], ['turnMax', 'turnOut', v => v]]) {
+  const show = () => $(out).textContent = fmt($(input).value);
+  $(input).addEventListener('input', show);
+  show();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Telemetry
+
+function setStatus(cls, text) {
+  $('status').className = cls;
+  $('status').textContent = text;
+}
+
+function add(list) {
+  for (const s of list) {
+    // Robot time went backwards: it rebooted, start the charts over
+    if (samples.length && s.t_us < samples[samples.length - 1].t_us) samples = [];
+    samples.push(s);
+  }
+  if (!samples.length) return;
+  const cutoff = samples[samples.length - 1].t_us - WINDOW_US;
+  const first = samples.findIndex(s => s.t_us >= cutoff);
+  if (first > 0) samples.splice(0, first);
+}
+
+function showStatus(d) {
+  if (d.age_ms === null) setStatus('', 'waiting for robot…');
+  else if (d.age_ms < ONLINE_MS) setStatus('ok', 'robot online');
+  else setStatus('bad', `no data for ${Math.round(d.age_ms / 1000)} s`);
+
+  let stats = `${d.total.toLocaleString()} samples received`;
+  if (samples.length > 1) {
+    const span = (samples[samples.length - 1].t_us - samples[0].t_us) / 1e6;
+    stats += ` · ${Math.round((samples.length - 1) / span)} Hz`;
+  }
+  $('stats').textContent = stats;
+}
+
+function showValues() {
+  const s = samples[samples.length - 1];
+  if (!s) return;
+  $('mode').textContent = s.mode;
+  $('mode').className = 'value ' + s.mode;
+  $('pitch').textContent = s.pitch_deg.toFixed(1);
+  $('target').textContent = s.target_deg.toFixed(1);
+  $('prate').textContent = s.pitch_rate_dps.toFixed(0);
+  $('uleft').textContent = (s.u_left * 100).toFixed(0);
+  $('uright').textContent = (s.u_right * 100).toFixed(0);
+  $('loop').textContent = s.loop_us;
+  $('link').textContent = s.link_ok ? 'ok' : 'lost';
+}
+
+// Round up to 1, 2 or 5 times a power of ten so the scale doesn't jitter
+function niceCeil(v) {
+  const p = 10 ** Math.floor(Math.log10(v));
+  return [1, 2, 5, 10].find(m => v <= m * p) * p;
+}
+
+function drawChart({ canvas, series, unit, minRange, fixed }) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+
+  let range = minRange;
+  if (!fixed) {
+    for (const s of samples) for (const [k] of series) range = Math.max(range, Math.abs(s[k]));
+    range = niceCeil(range);
+  }
+
+  const pad = 6;
+  const y = v => h / 2 - v / range * (h / 2 - pad);
+
+  // Zero line and half-range guides
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = color('--border');
+  for (const v of [-range / 2, 0, range / 2]) {
+    ctx.setLineDash(v === 0 ? [] : [4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, Math.round(y(v)) + 0.5);
+    ctx.lineTo(w, Math.round(y(v)) + 0.5);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  if (samples.length > 1) {
+    const newest = samples[samples.length - 1].t_us;
+    const x = t => w - (newest - t) / WINDOW_US * w;
+
+    // Shade the stretches where the robot was balancing
+    ctx.fillStyle = 'rgba(61, 214, 140, 0.07)';
+    let start = null;
+    samples.forEach((s, j) => {
+      const on = s.mode === 'balancing';
+      if (on && start === null) start = s.t_us;
+      if (start !== null && (!on || j === samples.length - 1)) {
+        ctx.fillRect(x(start), 0, x(s.t_us) - x(start), h);
+        start = null;
+      }
+    });
+
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    for (const [key, c] of series) {
+      ctx.strokeStyle = color(c);
+      ctx.beginPath();
+      samples.forEach((s, j) => {
+        const px = x(s.t_us), py = y(s[key]);
+        j ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      });
+      ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = color('--muted');
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`+${range} ${unit}`, 6, 4);
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`−${range} ${unit}`, 6, h - 4);
+  ctx.textAlign = 'right';
+  ctx.fillText('now', w - 6, h - 4);
+  ctx.textAlign = 'left';
+}
+
+function render() {
+  showValues();
+  CHARTS.forEach(drawChart);
+}
+
+async function poll() {
+  try {
+    const d = await api('GET', '/api/segway/telemetry' + (since === null ? '' : '?since=' + since));
+    // Fewer samples than we already saw: the server restarted
+    if (since !== null && d.total < since) samples = [];
+    add(d.samples);
+    since = d.total;
+    showStatus(d);
+    render();
+  } catch (e) {
+    setStatus('bad', 'server unreachable');
+  }
+  setTimeout(poll, POLL_MS);
+}
+
+window.addEventListener('resize', () => CHARTS.forEach(drawChart));
+render();
+refreshCommand();
+setInterval(refreshCommand, 1000);
+poll();
+</script>
+</body>
+</html>

@@ -1,1 +1,4 @@
 /target
+# Written at runtime by the Segway routes
+/segway_settings.json
+/segway_telemetry.csv
