@@ -53,7 +53,7 @@
   .sliders output { width: 48px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
   .tune { display: grid; grid-template-columns: auto auto; gap: 8px 12px; align-items: center; justify-content: start; }
   .tune span { color: var(--muted); }
-  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
   @media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
   .tile { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
   .tile .label { color: var(--muted); font-size: 12px; }
@@ -138,6 +138,8 @@
       <div class="tile"><div class="label">Left duty</div><div class="value"><span id="uleft">–</span><span class="unit">%</span></div></div>
       <div class="tile"><div class="label">Right duty</div><div class="value"><span id="uright">–</span><span class="unit">%</span></div></div>
       <div class="tile"><div class="label">Loop time</div><div class="value"><span id="loop">–</span><span class="unit">µs</span></div></div>
+      <div class="tile" title="Control loop rate measured on the robot (same as the IMU sample rate)"><div class="label">Control rate</div><div class="value"><span id="crate">–</span><span class="unit">Hz</span></div></div>
+      <div class="tile" title="Telemetry samples per second arriving at this page"><div class="label">Telemetry rate</div><div class="value"><span id="trate">–</span><span class="unit">Hz</span></div></div>
       <div class="tile"><div class="label">Server link</div><div class="value" id="link">–</div></div>
     </div>
   </section>
@@ -328,12 +330,15 @@ function showStatus(d) {
   else if (d.age_ms < ONLINE_MS) setStatus('ok', 'robot online');
   else setStatus('bad', `no data for ${Math.round(d.age_ms / 1000)} s`);
 
-  let stats = `${d.total.toLocaleString()} samples received`;
-  if (samples.length > 1) {
-    const span = (samples[samples.length - 1].t_us - samples[0].t_us) / 1e6;
-    stats += ` · ${Math.round((samples.length - 1) / span)} Hz`;
-  }
-  $('stats').textContent = stats;
+  $('stats').textContent = `${d.total.toLocaleString()} samples received`;
+  // Over the last 2 s of robot time, so it follows changes
+  const newest = samples.length ? samples[samples.length - 1].t_us : 0;
+  const recent = samples.filter(s => s.t_us >= newest - 2e6);
+  const span = recent.length > 1 ? (recent[recent.length - 1].t_us - recent[0].t_us) / 1e6 : 0;
+  $('trate').textContent = span > 0 ? ((recent.length - 1) / span).toFixed(0) : '–';
+  // Average of the robot's own measurement over the same samples
+  const rates = recent.map(s => s.rate_hz).filter(r => r > 0);
+  $('crate').textContent = rates.length ? (rates.reduce((a, b) => a + b) / rates.length).toFixed(1) : '–';
 }
 
 function showValues() {

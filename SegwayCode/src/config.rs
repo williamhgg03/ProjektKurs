@@ -45,7 +45,7 @@ pub const IMU_UP: Axis = Axis::PosZ;
 /// about +90 deg when the robot is upright; this brings upright back to 0. If it reads -90 deg
 /// upright instead, use +90. Small leftovers (the robot isn't balanced on center) belong in the
 /// target angle on the web page, not here.
-pub const PITCH_OFFSET_DEG: f32 = -90.0;
+pub const PITCH_OFFSET_DEG: f32 = -101.0;
 
 /// Complementary filter time constant. Below this the accelerometer wins, above it the gyro.
 pub const COMP_FILTER_TAU_S: f32 = 0.5;

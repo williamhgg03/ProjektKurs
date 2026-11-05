@@ -280,6 +280,8 @@ struct ControlLoop<E: Estimator, C: Controller> {
     tick: u32,
     /// Telemetry samples dropped since the last one that got through.
     dropped: u16,
+    /// IMU time of the previous telemetry sample, sent or dropped, for the measured loop rate.
+    last_telemetry_t_us: Option<i64>,
     stats: Stats,
 }
 
@@ -313,6 +315,7 @@ impl<E: Estimator, C: Controller> ControlLoop<E, C> {
             imu_errors_in_row: 0,
             tick: 0,
             dropped: 0,
+            last_telemetry_t_us: None,
             stats: Stats {
                 dt_min_us: u32::MAX,
                 dt_max_us: 0,
@@ -449,6 +452,14 @@ impl<E: Estimator, C: Controller> ControlLoop<E, C> {
     }
 
     fn send_telemetry(&mut self, imu: &ImuSample, target: f32, loop_us: u32) {
+        // Exactly TELEMETRY_DECIMATION ticks since the previous one, so this averages over them
+        let rate_hz = match self.last_telemetry_t_us {
+            Some(last) if imu.t_us > last => {
+                TELEMETRY_DECIMATION as f32 * 1e6 / (imu.t_us - last) as f32
+            }
+            _ => LOOP_HZ,
+        };
+        self.last_telemetry_t_us = Some(imu.t_us);
         let sample = Telemetry {
             t_us: imu.t_us,
             mode: self.mode,
@@ -461,6 +472,7 @@ impl<E: Estimator, C: Controller> ControlLoop<E, C> {
             accel: imu.accel,
             gyro: imu.gyro,
             loop_us: loop_us.min(u16::MAX as u32) as u16,
+            rate_hz,
             dropped: self.dropped,
             link_ok: self.link_ok,
         };

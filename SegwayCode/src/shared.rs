@@ -121,6 +121,8 @@ pub struct Telemetry {
     pub gyro: [f32; 3],
     /// Time the control code took this tick.
     pub loop_us: u16,
+    /// Measured control loop rate (= IMU sample rate) since the previous telemetry sample.
+    pub rate_hz: f32,
     /// Telemetry samples dropped just before this one because the uploader was behind.
     pub dropped: u16,
     /// Whether the commands were fresh (see LINK_TIMEOUT_MS).

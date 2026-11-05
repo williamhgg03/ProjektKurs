@@ -259,18 +259,21 @@ pub struct Sample {
     pub accel: [f32; 3],
     pub gyro: [f32; 3],
     pub loop_us: u16,
+    /// Measured control loop rate (= IMU sample rate). Missing from older firmware -> 0.
+    #[serde(default)]
+    pub rate_hz: f32,
     pub dropped: u16,
     pub link_ok: bool,
 }
 
-pub const CSV_HEADER: &str = "t_us,mode,pitch_deg,pitch_rate_dps,yaw_rate_dps,target_deg,u_left,u_right,ax,ay,az,gx,gy,gz,loop_us,dropped,link_ok";
+pub const CSV_HEADER: &str = "t_us,mode,pitch_deg,pitch_rate_dps,yaw_rate_dps,target_deg,u_left,u_right,ax,ay,az,gx,gy,gz,loop_us,rate_hz,dropped,link_ok";
 
 impl Sample {
     fn csv_line(&self) -> String {
         let [ax, ay, az] = self.accel;
         let [gx, gy, gz] = self.gyro;
         format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
             self.t_us,
             self.mode.as_str(),
             self.pitch_deg,
@@ -286,6 +289,7 @@ impl Sample {
             gy,
             gz,
             self.loop_us,
+            self.rate_hz,
             self.dropped,
             self.link_ok as u8,
         )
@@ -383,6 +387,7 @@ mod tests {
             accel: [0.0, 0.0, 1.0],
             gyro: [0.5, -0.25, 0.0],
             loop_us: 150,
+            rate_hz: 200.0,
             dropped: 0,
             link_ok: true,
         }
@@ -423,7 +428,7 @@ mod tests {
     fn parses_firmware_telemetry() {
         let body = r#"{"t_us":12345678,"mode":"balancing","pitch_deg":0.4,"pitch_rate_dps":-2.1,
             "yaw_rate_dps":0.0,"target_deg":1.5,"u_left":0.12,"u_right":0.12,
-            "accel":[0.0,0.0,1.0],"gyro":[0.1,-2.0,0.0],"loop_us":180,"dropped":0,"link_ok":true}"#;
+            "accel":[0.0,0.0,1.0],"gyro":[0.1,-2.0,0.0],"loop_us":180,"rate_hz":199.8,"dropped":0,"link_ok":true}"#;
         let s: Sample = serde_json::from_str(body).unwrap();
         assert_eq!(s.mode, Mode::Balancing);
         assert_eq!(s.accel, [0.0, 0.0, 1.0]);
