@@ -114,14 +114,14 @@
     <section>
       <h2>Tuning</h2>
       <form id="tune" class="tune">
-        <span>Trim (°)</span><input id="trim_deg" type="number" step="0.1" min="-10" max="10">
+        <span>Target angle (°)</span><input id="trim_deg" type="number" step="0.1" min="-10" max="10">
         <span>Kp</span><input id="kp" type="number" step="any" min="0">
         <span>Ki</span><input id="ki" type="number" step="any" min="0">
         <span>Kd</span><input id="kd" type="number" step="any" min="0">
         <span></span><button class="primary" type="submit">Apply</button>
       </form>
       <div id="active" class="note"></div>
-      <div class="note">Gains act on radians: Kp = 6 gives 10% duty at about 1° of error. Saved on the server.</div>
+      <div class="note">Target angle: the pitch it balances at, to make up for weight that isn't centered over the axle (+ leans forward, ±10° max). Gains act on radians: Kp = 6 gives 10% duty at about 1° of error. All saved on the server.</div>
     </section>
   </div>
 
@@ -220,7 +220,7 @@ function showCommand(c) {
   $('enable').textContent = c.enabled ? 'Disable motors' : 'Enable motors';
   $('enable').classList.toggle('primary', !c.enabled);
   const g = c.gains;
-  $('active').textContent = `Active: trim ${c.trim_deg}°, Kp ${g.kp}, Ki ${g.ki}, Kd ${g.kd} (v${c.version})`;
+  $('active').textContent = `Active: target ${c.trim_deg}°, Kp ${g.kp}, Ki ${g.ki}, Kd ${g.kd} (v${c.version})`;
   // Fill the form once, after that it belongs to the user until they press Apply
   if (first) fillTuning(c);
 }

@@ -57,8 +57,8 @@ fn main() -> anyhow::Result<()> {
         left_pwm_channel: peripherals.ledc.channel0,
         right_pwm_channel: peripherals.ledc.channel1,
         left_pwm: pins.gpio1.into(),    // TB6612 PWMA (A0)  
-        left_in1: pins.gpio8.into(),    // TB6612 AIN1 (D5)  
-        left_in2: pins.gpio7.into(),    // TB6612 AIN2 (D4)  
+        left_in1: pins.gpio7.into(),    // TB6612 AIN1 (D4)  
+        left_in2: pins.gpio8.into(),    // TB6612 AIN2 (D5)  
         right_pwm: pins.gpio2.into(),   // TB6612 PWMB (A1)  
         right_in1: pins.gpio9.into(),  // TB6612 BIN1 (D6)  
         right_in2: pins.gpio10.into(),  // TB6612 BIN2 (D7)  

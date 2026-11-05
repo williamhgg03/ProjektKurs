@@ -41,6 +41,12 @@ pub const IMU_FORWARD: Axis = Axis::PosX;
 pub const IMU_LEFT: Axis = Axis::PosY;
 pub const IMU_UP: Axis = Axis::PosZ;
 
+/// Added to the accelerometer's pitch angle. The sensor is mounted on its side, so it reads
+/// about +90 deg when the robot is upright; this brings upright back to 0. If it reads -90 deg
+/// upright instead, use +90. Small leftovers (the robot isn't balanced on center) belong in the
+/// target angle on the web page, not here.
+pub const PITCH_OFFSET_DEG: f32 = -90.0;
+
 /// Complementary filter time constant. Below this the accelerometer wins, above it the gyro.
 pub const COMP_FILTER_TAU_S: f32 = 0.5;
 

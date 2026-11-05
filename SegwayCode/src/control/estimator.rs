@@ -3,7 +3,14 @@
 // `Estimator` is the seam for the planned EKF: implement the trait and swap it in control/mod.rs.
 // The EKF will want the motor duty for its prediction step, which is why `update` receives it.
 
-use crate::config::{COMP_FILTER_TAU_S, IMU_FORWARD, IMU_LEFT, IMU_UP};
+use std::f32::consts::{PI, TAU};
+
+use crate::config::{COMP_FILTER_TAU_S, IMU_FORWARD, IMU_LEFT, IMU_UP, PITCH_OFFSET_DEG};
+
+/// Bring an angle back into -pi..pi after adding an offset.
+fn wrap_angle(a: f32) -> f32 {
+    (a + PI).rem_euclid(TAU) - PI
+}
 
 use super::imu::ImuSample;
 use super::{MotorOutput, State};
@@ -44,7 +51,8 @@ impl Estimator for ComplementaryFilter {
 
         // Leaning forward tips the sensor's forward axis down, so gravity's reaction shows up
         // as negative forward acceleration
-        let accel_pitch = (-IMU_FORWARD.pick(imu.accel)).atan2(IMU_UP.pick(imu.accel));
+        let raw = (-IMU_FORWARD.pick(imu.accel)).atan2(IMU_UP.pick(imu.accel));
+        let accel_pitch = wrap_angle(raw + PITCH_OFFSET_DEG.to_radians());
 
         let pitch = match self.pitch {
             None => accel_pitch,
