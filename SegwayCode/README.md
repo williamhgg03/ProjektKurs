@@ -56,6 +56,20 @@ The **EKF and nonlinear controller** plug in as new implementations of the `Esti
 3. **Motor direction:** with the wheels in the air, positive duty must drive the robot forward. Use `MOTOR_LEFT_INVERT` / `MOTOR_RIGHT_INVERT` to correct it.
 4. **WiFi:** `cp wifi.env.example wifi.env` and fill it in, or copy the one from `hello_esp32`.
 
+## Finding the balance point (auto-trim)
+
+The center of mass is not exactly above the axle, so the robot balances at some angle other than 0°. Holding any other angle takes constant motor torque, so the robot keeps driving off one way. Kp, Ki and Kd can't fix this: Ki on the angle never settles there.
+
+Auto-trim (`ka`) is a slow outer loop that fixes it:
+- If the low-passed motor duty stays positive (the robot keeps driving forward), it moves the target back, and vice versa.
+- The duty is the only speed signal, since there are no encoders.
+- It pauses while you drive and is clamped to ±`MAX_AUTO_TRIM_DEG`.
+
+Tuning on the `/segway` page:
+1. Set Ki = 0 and auto-trim = 2.
+2. Raise auto-trim if the robot still creeps; lower it if it rocks back and forth over several seconds.
+3. When it stands still, press **Save learned target**. The learned offset moves into the saved target angle and survives reboots.
+
 ## Build and flash
 
 Tool setup is the same as for `hello_esp32` (`cargo install espup ldproxy espflash`, then `espup install`).
@@ -67,17 +81,15 @@ cargo run --release     # flash and open the monitor
 
 ## Server contract
 
-The server side is not implemented yet.
-
 **`GET {SERVER_URL}/device/segway[?since=<version>]`** is a long-poll: when `since` equals the current version, the server holds the request for up to 10 s. It returns:
 
 ```json
 {"version": 3, "enabled": true, "trim_deg": 1.5, "lean_deg": 0.0, "turn": 0.0,
- "gains": {"kp": 6.0, "ki": 0.0, "kd": 0.3}}
+ "gains": {"kp": 6.0, "ki": 0.0, "kd": 0.3, "ka": 2.0}}
 ```
 
 - Every field is optional and defaults to 0 / false.
-- Gains act on radians: `kp` is duty per rad, `kd` is duty per rad/s.
+- Gains act on radians: `kp` is duty per rad, `kd` is duty per rad/s. `ka` is the auto-trim rate in °/s per unit of average duty.
 - `turn` is a differential duty; positive turns left.
 
 **`POST {SERVER_URL}/device/telemetry`** has the body `{"samples": [...]}`, sent every 250 ms. Samples come at 50 Hz, and each one looks like:
@@ -85,5 +97,5 @@ The server side is not implemented yet.
 ```json
 {"t_us": 12345678, "mode": "balancing", "pitch_deg": 0.4, "pitch_rate_dps": -2.1,
  "yaw_rate_dps": 0.0, "target_deg": 1.5, "u_left": 0.12, "u_right": 0.12,
- "accel": [0.0, 0.0, 1.0], "gyro": [0.1, -2.0, 0.0], "loop_us": 180, "dropped": 0, "link_ok": true}
+ "accel": [0.0, 0.0, 1.0], "gyro": [0.1, -2.0, 0.0], "loop_us": 180, "rate_hz": 200.0, "dropped": 0, "link_ok": true}
 ```

@@ -280,6 +280,11 @@ struct ControlLoop<E: Estimator, C: Controller> {
     tick: u32,
     /// Telemetry samples dropped since the last one that got through.
     dropped: u16,
+    /// Common motor duty, low-passed (AUTO_TRIM_TAU_S). Without encoders this is the best
+    /// measure of wheel speed: at a steady speed the duty mostly balances the motors' back-EMF.
+    duty_lp: f32,
+    /// Learned balance-point offset (rad) on top of the server's trim.
+    auto_trim: f32,
     /// IMU time of the previous telemetry sample, sent or dropped, for the measured loop rate.
     last_telemetry_t_us: Option<i64>,
     stats: Stats,
@@ -316,6 +321,8 @@ impl<E: Estimator, C: Controller> ControlLoop<E, C> {
             tick: 0,
             dropped: 0,
             last_telemetry_t_us: None,
+            duty_lp: 0.0,
+            auto_trim: 0.0,
             stats: Stats {
                 dt_min_us: u32::MAX,
                 dt_max_us: 0,
@@ -365,6 +372,10 @@ impl<E: Estimator, C: Controller> ControlLoop<E, C> {
         // Latest command from core 0. If it is being written right now, keep last tick's
         if let Some(cmd) = SHARED.commands.try_read() {
             if cmd != self.cmd {
+                if cmd.trim_deg != self.cmd.trim_deg {
+                    // A new manual target (e.g. the learned one being saved): start over from it
+                    self.auto_trim = 0.0;
+                }
                 self.controller.configure(&cmd);
                 self.cmd = cmd;
             }
@@ -381,18 +392,20 @@ impl<E: Estimator, C: Controller> ControlLoop<E, C> {
         } else {
             (0.0, 0.0)
         };
-        let target = (trim + lean).to_radians();
+        let target = (trim + lean).to_radians() + self.auto_trim;
 
         let next = self.next_mode(&state, target);
         if next != self.mode {
             if next == Mode::Balancing {
                 self.controller.reset();
+                self.duty_lp = 0.0;
             }
             self.set_mode(next);
         }
 
         if self.mode == Mode::Balancing {
             let u = self.controller.update(&state, target, dt);
+            self.learn_trim(u, lean, dt);
             // Positive turn = left: right wheel faster
             let out = MotorOutput {
                 left: shape_duty(u - turn),
@@ -419,6 +432,20 @@ impl<E: Estimator, C: Controller> ControlLoop<E, C> {
         if self.tick % LOOP_HZ as u32 == 0 {
             self.publish_status();
         }
+    }
+
+    /// Auto-trim, an outer loop much slower than the balance loop. Holding any angle other than
+    /// the true balance point takes constant torque, so the robot keeps driving one way. If it
+    /// keeps driving forward the target is too far forward: move it back, and vice versa.
+    fn learn_trim(&mut self, u: f32, lean: f32, dt: f32) {
+        self.duty_lp += (u - self.duty_lp) * dt / (AUTO_TRIM_TAU_S + dt);
+        // While driving on purpose the duty is meant to be nonzero, learning would cancel it
+        if lean != 0.0 {
+            return;
+        }
+        let max = MAX_AUTO_TRIM_DEG.to_radians();
+        let step = self.cmd.gains.ka.to_radians() * self.duty_lp * dt;
+        self.auto_trim = (self.auto_trim - step).clamp(-max, max);
     }
 
     /// The safety state machine, see shared::Mode.

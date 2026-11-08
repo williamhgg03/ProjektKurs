@@ -36,6 +36,7 @@ pub struct Shared {
 
 /// PID gains. They act on radians: kp is duty per rad, ki duty per rad*s, kd duty per rad/s.
 /// (1 degree = 0.01745 rad, so kp = 6 means 10% duty at about 1 degree of error.)
+/// ka is the auto-trim rate, see ControlLoop: degrees/s the target moves per unit of average duty.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct Gains {
@@ -45,6 +46,9 @@ pub struct Gains {
     pub ki: f32,
     #[serde(deserialize_with = "f32_via_f64")]
     pub kd: f32,
+    /// 0 (also when the server doesn't send it) turns auto-trim off.
+    #[serde(deserialize_with = "f32_via_f64")]
+    pub ka: f32,
 }
 
 /// What the server wants the robot to do. Body of `GET /device/segway`.
@@ -80,6 +84,7 @@ impl Command {
             kp: 0.0,
             ki: 0.0,
             kd: 0.0,
+            ka: 0.0,
         },
     };
 }

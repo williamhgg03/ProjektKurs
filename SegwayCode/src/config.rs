@@ -73,6 +73,15 @@ pub const MAX_TRIM_DEG: f32 = 10.0;
 pub const MAX_TURN: f32 = 0.3;
 
 // ---------------------------------------------------------------------------------------------
+// Auto-trim: learns the balance point while balancing (rate ka from the server, see Gains)
+// ---------------------------------------------------------------------------------------------
+
+/// Low-pass on the motor duty before it moves the target, averages out the balancing wobble.
+pub const AUTO_TRIM_TAU_S: f32 = 1.0;
+/// Most the learned offset may add to the target angle.
+pub const MAX_AUTO_TRIM_DEG: f32 = 8.0;
+
+// ---------------------------------------------------------------------------------------------
 // Controller (PID). Gains come from the server, see shared::Gains.
 // ---------------------------------------------------------------------------------------------
 

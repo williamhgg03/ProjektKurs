@@ -19,17 +19,23 @@ pub const MAX_LEAN_DEG: f32 = 10.0;
 pub const MAX_TURN: f32 = 0.3;
 /// Sanity bound on PID gains, far above anything that balances.
 pub const MAX_GAIN: f32 = 1000.0;
+/// Bound on the auto-trim rate ka, above this the outer loop gets as fast as the balancing.
+pub const MAX_AUTO_TRIM_RATE: f32 = 20.0;
 
 // ---------------------------------------------------------------------------------------------
 // Command
 // ---------------------------------------------------------------------------------------------
 
-/// PID gains, acting on radians (kp: duty per rad, ki: duty per rad*s, kd: duty per rad/s).
+/// PID gains, acting on radians (kp: duty per rad, ki: duty per rad*s, kd: duty per rad/s),
+/// plus the auto-trim rate ka (degrees/s the target moves per unit of average duty, 0 = off).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Gains {
     pub kp: f32,
     pub ki: f32,
     pub kd: f32,
+    /// Missing from settings files saved before auto-trim existed.
+    #[serde(default)]
+    pub ka: f32,
 }
 
 /// What the robot should do. Body of `GET /device/segway`.
@@ -64,6 +70,7 @@ pub struct CommandUpdate {
     pub kp: Option<f32>,
     pub ki: Option<f32>,
     pub kd: Option<f32>,
+    pub ka: Option<f32>,
 }
 
 /// Driving input from the web page. Has to be repeated while held (see the dead-man timeout).
@@ -140,6 +147,7 @@ impl Command {
         let kp = check_opt("kp", u.kp, 0.0, MAX_GAIN)?;
         let ki = check_opt("ki", u.ki, 0.0, MAX_GAIN)?;
         let kd = check_opt("kd", u.kd, 0.0, MAX_GAIN)?;
+        let ka = check_opt("ka", u.ka, 0.0, MAX_AUTO_TRIM_RATE)?;
 
         let before = *self;
         if let Some(enabled) = u.enabled {
@@ -161,6 +169,9 @@ impl Command {
         }
         if let Some(v) = kd {
             self.gains.kd = v;
+        }
+        if let Some(v) = ka {
+            self.gains.ka = v;
         }
         Ok(*self != before)
     }
@@ -412,14 +423,14 @@ mod tests {
             trim_deg: 1.5,
             lean_deg: 0.0,
             turn: 0.0,
-            gains: Gains { kp: 6.0, ki: 0.0, kd: 0.25 },
+            gains: Gains { kp: 6.0, ki: 0.0, kd: 0.25, ka: 0.0 },
         };
         let json = serde_json::to_value(cmd).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
                 "version": 3, "enabled": true, "trim_deg": 1.5, "lean_deg": 0.0, "turn": 0.0,
-                "gains": {"kp": 6.0, "ki": 0.0, "kd": 0.25}
+                "gains": {"kp": 6.0, "ki": 0.0, "kd": 0.25, "ka": 0.0}
             })
         );
     }
@@ -473,7 +484,7 @@ mod tests {
         };
         assert_eq!(cmd.apply(&u), Ok(true));
         assert_eq!(cmd.apply(&u), Ok(false));
-        assert_eq!(cmd.settings(), Settings { trim_deg: 1.0, gains: Gains { kp: 6.0, ki: 0.0, kd: 0.0 } });
+        assert_eq!(cmd.settings(), Settings { trim_deg: 1.0, gains: Gains { kp: 6.0, ki: 0.0, kd: 0.0, ka: 0.0 } });
     }
 
     #[test]
@@ -512,7 +523,7 @@ mod tests {
         let path = dir.join("settings.json");
 
         assert_eq!(load_settings(&path).unwrap(), Settings::default());
-        let s = Settings { trim_deg: -0.5, gains: Gains { kp: 8.0, ki: 1.0, kd: 0.3 } };
+        let s = Settings { trim_deg: -0.5, gains: Gains { kp: 8.0, ki: 1.0, kd: 0.3, ka: 0.0 } };
         save_settings(&path, &s).unwrap();
         assert_eq!(load_settings(&path).unwrap(), s);
         std::fs::remove_dir_all(&dir).unwrap();
@@ -534,5 +545,22 @@ mod tests {
         assert_eq!(times(&log.since(None, 2)), vec![8, 9]);
         // `since` from before a server restart: start over with the newest
         assert_eq!(times(&log.since(Some(50), 3)), vec![7, 8, 9]);
+    }
+
+    #[test]
+    fn old_settings_without_ka_load() {
+        let s: Settings = serde_json::from_str(r#"{"trim_deg": 1.0, "gains": {"kp": 6.0, "ki": 0.0, "kd": 0.3}}"#).unwrap();
+        assert_eq!(s.gains.ka, 0.0);
+        assert_eq!(s.gains.kp, 6.0);
+    }
+
+    #[test]
+    fn ka_is_validated() {
+        let mut cmd = Command::from_settings(Settings::default());
+        let bad = CommandUpdate { ka: Some(MAX_AUTO_TRIM_RATE + 1.0), ..Default::default() };
+        assert!(matches!(cmd.apply(&bad), Err(CommandError::OutOfRange { field: "ka", .. })));
+        let ok = CommandUpdate { ka: Some(2.0), ..Default::default() };
+        assert_eq!(cmd.apply(&ok).unwrap(), true);
+        assert_eq!(cmd.gains.ka, 2.0);
     }
 }
