@@ -1,0 +1,171 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathrsfs}
+\usepackage{mathtools}
+\usepackage{pgfplots}
+\usepackage{tikz}
+\usetikzlibrary{3d,calc,arrows.meta}
+
+\pgfplotsset{compat=1.18}
+
+\title{Segway}
+\author{Fabian Dalenius}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Boundry Condition}
+
+\[
+  \mathrm{
+    E_K^{body} = \frac{1}{2} \, m_b \, ( \dot{x}_b^2 + \dot{y}_b^2 + \dot{z}_b^2 ) + \frac{1}{2} \, I_b \, \dot{\theta}_b^2
+  }
+\]
+
+\[
+  \mathrm{
+    E_K^{wheels} = \frac{1}{2} \, m_w \, ( \dot{x}_{w_{left}}^2 + \dot{x}_{w_{right}}^2 + \dot{y}_{w_{left}}^2 + \dot{y}_{w_{right}}^2 + \dot{z}_w^2 ) + \frac{1}{2} \, I_w \, ( \dot{\theta}_{w_{left}}^2 + \dot{\theta}_{w_{right}}^2 )
+  }
+\]
+
+\[
+  \mathrm{
+    E_P^{body} = m_b \, g \, ( l_b \, cos(\theta_b) + z_w )
+  }
+\]
+
+\[
+  \mathrm{
+    E_P^{wheels} = m_w \, g \, z_w
+  }
+\]
+
+\[
+  \mathrm{
+    x_b = x_w + x_0 + l_b \, sin(\theta_b) \, cos(\varphi_b)
+  }
+\]
+
+\[
+  \mathrm{
+    y_b = y_w + y_0 + l_b \, sin(\theta_b) \, sin(\varphi_b)
+  }
+\]
+
+\[
+  \mathrm{
+    z_b = z_w + z_0 + l_b \, cos(\theta_b)
+  }
+\]
+
+\[
+ \mathrm{
+   x_{w_{left}} = x_w - \frac{L}{2} \, sin(\varphi_w)
+ } 
+\]
+
+\[
+ \mathrm{
+   y_{w_{left}} = y_w + \frac{L}{2} \, cos(\varphi_w)
+ } 
+\]
+
+\[
+ \mathrm{
+   x_{w_{right}} = x_w + \frac{L}{2} \, sin(\varphi_w)
+ } 
+\]
+
+\[
+ \mathrm{
+   y_{w_{right}} = y_w - \frac{L}{2} \, cos(\varphi_w)
+ } 
+\]
+
+\[
+  \mathrm{
+    \dot{x}_w = \frac{z_w}{2} \, ( \dot{\theta}_{w_{left}} + \dot{\theta}_{w_{right}} ) \, cos(\varphi_w)
+  }
+\]
+
+\[
+  \mathrm{
+    \dot{y}_w = \frac{z_w}{2} \, ( \dot{\theta}_{w_{left}} + \dot{\theta}_{w_{right}} ) \, sin(\varphi_w)
+  }
+\]
+
+\[
+  \mathrm{
+    \dot{\varphi}_w = \frac{z_w}{L} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )
+  }
+\]
+
+\[
+  \mathrm{
+    z_w \coloneq l_w \: , \: z_0 \coloneq 0 \: , \: \varphi \coloneq \varphi_b = \varphi_w
+  }
+\]
+
+\[
+  \mathrm{
+    E_K \triangleq E_K^{body} + E_K^{wheel} \: , \: E_P \triangleq E_P^{body} + E_P^{wheel} \: , \: \mathcal{L} \triangleq E_K - E_P
+  }
+\]
+
+\[
+  \mathrm{
+    \begin{aligned}
+      E_K &= \frac{m_b}{2} \, \Bigl( \frac{l_w^2}{4} \, ( \dot{\theta}_{w_{left}} + \dot{\theta}_{w_{right}} )^2 + l_b^2 \, \bigl( \dot{\theta}_b^2 + \\
+          & \quad + \frac{l_w}{L}^2 \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 \, sin^2(\theta_b) \bigr) \Bigr) + \\
+          & \quad + \frac{m_b \, l_b \, l_w}{2} \, ( \dot{\theta}_{w_{left}}  + \dot{\theta}_{w_{right}} ) \, \dot{\theta}_b \, cos(\theta_b)  + \frac{I_b}{2} \, \dot{\theta}_b^2 + \\
+          & \quad + \frac{m_w \, l_w^2}{4} \, ( \dot{\theta}_{w_{left}}^2 + \dot{\theta}_{w_{right}}^2 ) ) + \\
+          & \quad + \frac{I_w}{2} \, ( \dot{\theta}_{w_{left}}^2 + \dot{\theta}_{w_{right}}^2 )
+    \end{aligned}
+  }
+\]
+
+\[
+  \mathrm{
+    E_P = m_b \, g \, ( l_b \, cos(\theta_b) + l_w ) + m_w \, g \, l_w
+  }
+\]
+
+\[
+  \mathrm{
+    \begin{aligned}
+      & \partial_{t \, , \, \dot{\theta}_b} \mathcal{L} - \partial_{\theta_b} \mathcal{L} = Q_{\theta_b} \Rightarrow \\
+      & \quad m_b \, l_b^2 \, \ddot{\theta}_b - \frac{m_b \, l_b \, l_w}{2} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) \, \dot{\theta}_b \, sin(\theta_b) + I_b \, \ddot{\theta}_b + \\
+      & \quad - \frac{m_b \, l_b^2 \, l_w^2}{L^2} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 \, sin(\theta_b) \, cos(\theta_b) + \\
+      & \quad +  \frac{m_b \, l_b \, l_w}{2} \, ( \dot{\theta}_{w_{left}}  + \dot{\theta}_{w_{right}} ) \, \dot{\theta}_b \, sin(\theta_b) - m_b \, g \, l_b \, sin(\theta_b) = Q_{\theta_b}
+    \end{aligned}
+  }
+\]
+
+\[
+  \mathrm{
+    \begin{aligned}
+      & \partial_{t \, , \, \dot{\theta}_{w_{left}}} \mathcal{L} - \partial_{\theta_{w_{left}}} \mathcal{L} = Q_{\theta_{w_{left}}} \Rightarrow \\
+      & \quad \frac{m_b \, l_w^2}{4} \, \left( ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) - \frac{l_b \, l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) \, sin^2(\theta_b) \right) + \\
+      & \quad - \frac{m_b \, l_b \, l_w}{2} \, ( \dot{\theta}_{w_{left}}  + \dot{\theta}_{w_{right}} ) \, \dot{\theta}_b \, cos(\theta_b) \\
+      & \quad + \frac{m_b \, l_b \, l_w}{2} \, \ddot{\theta}_{w_{left}} \, cos(\theta_b) + \frac{m_w \, l_w^2}{4} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \\
+      & \quad + I_w \, \theta_{w_left} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) = Q_{\theta_{w_{left}}}
+    \end{aligned}
+  }
+\]
+
+\[
+  \mathrm{
+    \begin{aligned}
+      & \partial_{t \, , \, \dot{\theta}_{w_{right}}} \mathcal{L} - \partial_{\theta_{w_{right}}} \mathcal{L} = Q_{\theta_{w_{right}}} \Rightarrow \\
+      & \quad \frac{m_b \, l_w^2}{4} \, \left( ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \frac{l_b \, l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) \, sin^2(\theta_b) \right) + \\
+      & \quad + \frac{m_b \, l_b \, l_w}{2} \, \ddot{\theta}_{w_{right}} \, cos(\theta_b) + \frac{m_w \, l_w^2}{4} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \\
+      & \quad + I_w \, \theta_{w_{right}} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) = Q_{\theta_{w_{right}}}
+    \end{aligned}
+  }
+\]
+
+\end{document}
