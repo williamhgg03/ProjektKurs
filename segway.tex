@@ -18,17 +18,17 @@
 
 \maketitle
 
-\section{Boundry Condition}
+\section{Math stuff...}
 
 \[
   \mathrm{
-    E_K^{body} = \frac{1}{2} \, m_b \, ( \dot{x}_b^2 + \dot{y}_b^2 + \dot{z}_b^2 ) + \frac{1}{2} \, I_b \, \dot{\theta}_b^2
+    E_K^{body} = \frac{1}{2} \, m_b \, ( \dot{x}_b^2 + \dot{y}_b^2 + \dot{z}_b^2 ) + \frac{1}{2} \, I_{b_{yy}} \, \dot{\theta}_b^2+ \frac{1}{2} \, ( I_{b_{xx}} \, sin^2(\theta_b) + I_{b_{zz}} \, cos^2(\theta_b) ) \, \dot{\varphi}_b^2
   }
 \]
 
 \[
   \mathrm{
-    E_K^{wheels} = \frac{1}{2} \, m_w \, ( \dot{x}_{w_{left}}^2 + \dot{x}_{w_{right}}^2 + \dot{y}_{w_{left}}^2 + \dot{y}_{w_{right}}^2 + \dot{z}_w^2 ) + \frac{1}{2} \, I_w \, ( \dot{\theta}_{w_{left}}^2 + \dot{\theta}_{w_{right}}^2 )
+    E_K^{wheels} = \frac{1}{2} \, m_w \, ( \dot{x}_{w_{left}}^2 + \dot{x}_{w_{right}}^2 + \dot{y}_{w_{left}}^2 + \dot{y}_{w_{right}}^2 + 2 \, \dot{z}_w^2 ) + \frac{1}{2} \, I_w \, ( \dot{\theta}_{w_{left}}^2 + \dot{\theta}_{w_{right}}^2 )
   }
 \]
 
@@ -40,7 +40,7 @@
 
 \[
   \mathrm{
-    E_P^{wheels} = m_w \, g \, z_w
+    E_P^{wheels} = 2 \, m_w \, g \, z_w
   }
 \]
 
@@ -120,9 +120,9 @@
   \mathrm{
     \begin{aligned}
       E_K &= \frac{m_b}{2} \, \Bigl( \frac{l_w^2}{4} \, ( \dot{\theta}_{w_{left}} + \dot{\theta}_{w_{right}} )^2 + l_b^2 \, \bigl( \dot{\theta}_b^2 + \\
-          & \quad + \frac{l_w}{L}^2 \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 \, sin^2(\theta_b) \bigr) \Bigr) + \\
+          & \quad + \frac{l_w^2}{L^2} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 \, sin^2(\theta_b) \bigr) \Bigr) + \\
           & \quad + \frac{m_b \, l_b \, l_w}{2} \, ( \dot{\theta}_{w_{left}}  + \dot{\theta}_{w_{right}} ) \, \dot{\theta}_b \, cos(\theta_b)  + \frac{I_b}{2} \, \dot{\theta}_b^2 + \\
-          & \quad + \frac{m_w \, l_w^2}{4} \, ( \dot{\theta}_{w_{left}}^2 + \dot{\theta}_{w_{right}}^2 ) ) + \\
+          & \quad + \frac{I_{b_{zz}} \, l_w^2}{2 \, L^2} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 + \frac{m_w \, l_w^2}{2} \, ( \dot{\theta}_{w_{left}}^2 + \dot{\theta}_{w_{right}}^2 ) + \\
           & \quad + \frac{I_w}{2} \, ( \dot{\theta}_{w_{left}}^2 + \dot{\theta}_{w_{right}}^2 )
     \end{aligned}
   }
@@ -130,7 +130,7 @@
 
 \[
   \mathrm{
-    E_P = m_b \, g \, ( l_b \, cos(\theta_b) + l_w ) + m_w \, g \, l_w
+    E_P = m_b \, g \, ( l_b \, cos(\theta_b) + l_w ) + 2 \, m_w \, g \, l_w
   }
 \]
 
@@ -138,9 +138,9 @@
   \mathrm{
     \begin{aligned}
       & \partial_{t \, , \, \dot{\theta}_b} \mathcal{L} - \partial_{\theta_b} \mathcal{L} = Q_{\theta_b} \Rightarrow \\
-      & \quad m_b \, l_b^2 \, \ddot{\theta}_b - \frac{m_b \, l_b \, l_w}{2} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) \, \dot{\theta}_b \, sin(\theta_b) + I_b \, \ddot{\theta}_b + \\
+      & \quad m_b \, l_b^2 \, \ddot{\theta}_b + \frac{m_b \, l_b \, l_w}{2} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) \, cos(\theta_b) +  I_b \, \ddot{\theta}_b + \\
       & \quad - \frac{m_b \, l_b^2 \, l_w^2}{L^2} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 \, sin(\theta_b) \, cos(\theta_b) + \\
-      & \quad +  \frac{m_b \, l_b \, l_w}{2} \, ( \dot{\theta}_{w_{left}}  + \dot{\theta}_{w_{right}} ) \, \dot{\theta}_b \, sin(\theta_b) - m_b \, g \, l_b \, sin(\theta_b) = Q_{\theta_b}
+      & \quad - m_b \, g \, l_b \, sin(\theta_b) = Q_{\theta_b}
     \end{aligned}
   }
 \]
@@ -149,10 +149,9 @@
   \mathrm{
     \begin{aligned}
       & \partial_{t \, , \, \dot{\theta}_{w_{left}}} \mathcal{L} - \partial_{\theta_{w_{left}}} \mathcal{L} = Q_{\theta_{w_{left}}} \Rightarrow \\
-      & \quad \frac{m_b \, l_w^2}{4} \, \left( ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) - \frac{l_b \, l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) \, sin^2(\theta_b) \right) + \\
-      & \quad - \frac{m_b \, l_b \, l_w}{2} \, ( \dot{\theta}_{w_{left}}  + \dot{\theta}_{w_{right}} ) \, \dot{\theta}_b \, cos(\theta_b) \\
-      & \quad + \frac{m_b \, l_b \, l_w}{2} \, \ddot{\theta}_{w_{left}} \, cos(\theta_b) + \frac{m_w \, l_w^2}{4} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \\
-      & \quad + I_w \, \theta_{w_left} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) = Q_{\theta_{w_{left}}}
+      & \quad m_b \, l_w^2 \, \Bigl( \frac{1}{4} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) - \frac{l_b^2}{L^2} \, \bigl( ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) \, sin^2(\theta_b) + \\
+      & \quad 2 \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} ) \, \dot{\theta}_b \, sin(\theta_b) \, cos(\theta_b) \bigl) \Bigr) + \frac{m_b \, l_b \, l_w}{2} \, \bigl( \ddot{\theta}_b \, cos(\theta_b) + \\
+      & \quad - \dot{\theta_b}^2 \, sin(\theta_b) \bigr) - \frac{I_{b_{zz}} \, l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) + m_w \, l_w^2 \, \ddot{\theta}_{w_{left}} + I_w \, \ddot{\theta}_{w_{left}} = Q_{\theta_{w_{left}}}
     \end{aligned}
   }
 \]
@@ -161,9 +160,9 @@
   \mathrm{
     \begin{aligned}
       & \partial_{t \, , \, \dot{\theta}_{w_{right}}} \mathcal{L} - \partial_{\theta_{w_{right}}} \mathcal{L} = Q_{\theta_{w_{right}}} \Rightarrow \\
-      & \quad \frac{m_b \, l_w^2}{4} \, \left( ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \frac{l_b \, l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) \, sin^2(\theta_b) \right) + \\
-      & \quad + \frac{m_b \, l_b \, l_w}{2} \, \ddot{\theta}_{w_{right}} \, cos(\theta_b) + \frac{m_w \, l_w^2}{4} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \\
-      & \quad + I_w \, \theta_{w_{right}} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) = Q_{\theta_{w_{right}}}
+      & \quad m_b \, l_w^2 \, \Bigl( \frac{1}{4} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \frac{l_b^2}{L^2} \, \bigl( ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) \, sin^2(\theta_b) + \\
+      & \quad 2 \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} ) \, \dot{\theta}_b \, sin(\theta_b) \, cos(\theta_b) \bigl) \Bigr) + \frac{m_b \, l_b \, l_w}{2} \, \bigl( \ddot{\theta}_b \, cos(\theta_b) + \\
+      & \quad - \dot{\theta_b}^2 \, sin(\theta_b) \bigr) + \frac{I_{b_{zz}} \, l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) + m_w \, l_w^2 \, \ddot{\theta}_{w_{right}} + I_w \, \ddot{\theta}_{w_{right}} = Q_{\theta_{w_{right}}}
     \end{aligned}
   }
 \]

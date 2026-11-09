@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1794156905.03666 "/home/Dalenius/dev/Projects/segway-math/segway.tex" "docs/segway.pdf" "segway" 1794156905.33344 0
-  "/home/Dalenius/dev/Projects/segway-math/segway.tex" 1794155916.60591 5224 353fa0eb224bdf87e81ff86308424080 ""
+["pdflatex"] 1794214653.79463 "/home/Dalenius/dev/Projects/segway-math/segway.tex" "docs/segway.pdf" "segway" 1794214654.22666 0
+  "/home/Dalenius/dev/Projects/segway-math/segway.tex" 1794214651.59706 5493 ab765aa9bd1b6aa8b33fa373c1cc06e2 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex8.tfm" 1246382020 988 bdf658c3bfc2d96d3c8b02cfc1c94c20 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam10.tfm" 1246382020 916 f87d7c45f9c908e672703b83b72241a3 ""
@@ -175,8 +175,8 @@
   "/usr/share/texlive/texmf-dist/web2c/texmf.cnf" 1777593600 43785 66587115382950aca692b5f6e3c2fb74 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1786463905 293079 eb34fef57086acb79b142616bb11dc70 ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1786463900 2299043 e13f8f263f014c7f8c27cc5d6b996f06 ""
-  "docs/segway.aux" 1794156905.29218 137 b30a021ce0e29486a565a2f6bd782483 "pdflatex"
-  "segway.tex" 1794155916.60591 5224 353fa0eb224bdf87e81ff86308424080 ""
+  "docs/segway.aux" 1794214654.17364 137 b30a021ce0e29486a565a2f6bd782483 "pdflatex"
+  "segway.tex" 1794214651.59706 5493 ab765aa9bd1b6aa8b33fa373c1cc06e2 ""
   (generated)
   "docs/segway.aux"
   "docs/segway.log"
