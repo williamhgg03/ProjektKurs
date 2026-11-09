@@ -34,7 +34,7 @@ impl Controller for Pid {
     }
 
     fn update(&mut self, state: &State, target_pitch: f32, dt: f32) -> f32 {
-        let Gains { kp, ki, kd, .. } = self.gains;
+        let Gains { kp, ki, kd } = self.gains;
         let error = state.pitch - target_pitch;
 
         let p = kp * error;

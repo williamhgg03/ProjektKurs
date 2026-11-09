@@ -118,14 +118,10 @@
         <span>Kp</span><input id="kp" type="number" step="any" min="0">
         <span>Ki</span><input id="ki" type="number" step="any" min="0">
         <span>Kd</span><input id="kd" type="number" step="any" min="0">
-        <span>Auto-trim</span><input id="ka" type="number" step="any" min="0" max="20">
         <span></span><button class="primary" type="submit">Apply</button>
       </form>
-      <button id="saveTarget" type="button" disabled title="Only while balancing and not driving">Save learned target</button>
       <div id="active" class="note"></div>
-      <div class="note">Target angle: the pitch it balances at, to make up for weight that isn't centered over the axle (+ leans forward, ±10° max). Gains act on radians: Kp = 6 gives 10% duty at about 1° of error.
-        Auto-trim (°/s per unit duty, 0 = off) slowly moves the target until the robot stops running off in one direction; start at 2 with Ki = 0, lower it if it rocks back and forth over several seconds.
-        When it stands still, "Save learned target" stores the target it found. All saved on the server.</div>
+      <div class="note">Target angle: the pitch it balances at, to make up for weight that isn't centered over the axle (+ leans forward, ±10° max). Gains act on radians: Kp = 6 gives 10% duty at about 1° of error. All saved on the server.</div>
     </section>
   </div>
 
@@ -226,7 +222,7 @@ function showCommand(c) {
   $('enable').textContent = c.enabled ? 'Disable motors' : 'Enable motors';
   $('enable').classList.toggle('primary', !c.enabled);
   const g = c.gains;
-  $('active').textContent = `Active: target ${c.trim_deg}°, Kp ${g.kp}, Ki ${g.ki}, Kd ${g.kd}, auto-trim ${g.ka ?? 0} (v${c.version})`;
+  $('active').textContent = `Active: target ${c.trim_deg}°, Kp ${g.kp}, Ki ${g.ki}, Kd ${g.kd} (v${c.version})`;
   // Fill the form once, after that it belongs to the user until they press Apply
   if (first) fillTuning(c);
 }
@@ -236,7 +232,6 @@ function fillTuning(c) {
   $('kp').value = c.gains.kp;
   $('ki').value = c.gains.ki;
   $('kd').value = c.gains.kd;
-  $('ka').value = c.gains.ka ?? 0;
 }
 
 $('enable').onclick = () => send('PUT', '/api/segway', { enabled: !(cmd && cmd.enabled) });
@@ -245,23 +240,8 @@ $('stop').onclick = () => send('POST', '/api/segway/stop');
 $('tune').onsubmit = async e => {
   e.preventDefault();
   const num = id => parseFloat($(id).value);
-  await send('PUT', '/api/segway', { trim_deg: num('trim_deg'), kp: num('kp'), ki: num('ki'), kd: num('kd'), ka: num('ka') });
+  await send('PUT', '/api/segway', { trim_deg: num('trim_deg'), kp: num('kp'), ki: num('ki'), kd: num('kd') });
   if (cmd) fillTuning(cmd);
-};
-
-// The latest target includes what auto-trim learned; saving it as the trim makes the robot
-// reset its learned part, so the target stays where it is and survives reboots
-function learnedTarget() {
-  const s = samples[samples.length - 1];
-  if (!s || s.mode !== 'balancing' || !cmd || cmd.lean_deg !== 0) return null;
-  return Math.max(-10, Math.min(10, Math.round(s.target_deg * 10) / 10));
-}
-
-$('saveTarget').onclick = async () => {
-  const t = learnedTarget();
-  if (t === null) return;
-  await send('PUT', '/api/segway', { trim_deg: t });
-  $('trim_deg').value = t;
 };
 
 async function refreshCommand() {
@@ -373,9 +353,6 @@ function showValues() {
   $('uright').textContent = (s.u_right * 100).toFixed(0);
   $('loop').textContent = s.loop_us;
   $('link').textContent = s.link_ok ? 'ok' : 'lost';
-  const t = learnedTarget();
-  $('saveTarget').disabled = t === null;
-  $('saveTarget').textContent = t === null ? 'Save learned target' : `Save learned target (${t}°)`;
 }
 
 // Round up to 1, 2 or 5 times a power of ten so the scale doesn't jitter
