@@ -48,6 +48,7 @@ esp-radio = { version = "0.18.0", features = [
   "esp32s3",
   "unstable",
   "wifi",
+  "wifi-eap",
 ] }
 smoltcp = { version = "0.13.0", default-features = false, features = [
   "defmt",
@@ -77,6 +78,9 @@ embedded-hal = "1.0"
 embedded-hal-bus = "0.3.0"
 embassy-sync = "0.7"
 reqwless = { version = "0.14.0", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive"] }
+serde-json-core = "0.6"
+heapless = { version = "0.8", features = ["serde"] }
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]
