@@ -133,21 +133,36 @@ async fn main(spawner: Spawner) -> ! {
             .expect("Failed to spawn HTTP task"),
     );
 
+    // Pin map for the Waveshare ESP32-S3-Zero. Only pins on the two side
+    // headers (GP1-GP13) are used. Avoided: GP0/GP3/GP45/GP46 (strapping),
+    // GP21 (onboard WS2812 LED), GP19/GP20 (USB), GP43/GP44 (UART0 TX/RX).
+    //
+    //   1.28" Touch LCD  ->  ESP32-S3-Zero
+    //   LCD_DIN/MOSI     ->  GP11
+    //   LCD_CLK/SCLK     ->  GP12
+    //   LCD_CS           ->  GP10
+    //   LCD_DC           ->  GP9
+    //   LCD_RST          ->  GP8
+    //   LCD_BL           ->  GP7
+    //   TP_SDA           ->  GP6
+    //   TP_SCL           ->  GP5
+    //   TP_INT           ->  GP4  (wired, not used by the firmware yet)
+    //   TP_RST           ->  GP2
     let lcd = lcd::display::Lcd::new(
         m_Peripherals.SPI2,
-        m_Peripherals.GPIO47,
-        m_Peripherals.GPIO38,
-        m_Peripherals.GPIO21,
-        m_Peripherals.GPIO18,
-        m_Peripherals.GPIO17,
-        m_Peripherals.GPIO10,
+        m_Peripherals.GPIO11, // MOSI
+        m_Peripherals.GPIO12, // SCLK
+        m_Peripherals.GPIO10, // LCD_CS
+        m_Peripherals.GPIO9,  // LCD_DC
+        m_Peripherals.GPIO8,  // LCD_RST
+        m_Peripherals.GPIO7,  // LCD_BL
     );
 
     let touch = touch::touch::Touch::new(
         m_Peripherals.I2C0,
-        m_Peripherals.GPIO6,
-        m_Peripherals.GPIO7,
-        m_Peripherals.GPIO13,
+        m_Peripherals.GPIO6, // TP_SDA
+        m_Peripherals.GPIO5, // TP_SCL
+        m_Peripherals.GPIO2, // TP_RST
     );
 
     // TODO: Spawn some tasks

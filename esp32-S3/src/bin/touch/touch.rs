@@ -2,9 +2,9 @@ use defmt::info;
 
 use esp_hal::{
     delay::Delay,
-    gpio::{Level, Output, OutputConfig},
+    gpio::{InputPin, Level, Output, OutputConfig, OutputPin},
     i2c::master::{Config as I2cConfig, I2c},
-    peripherals::{GPIO13, GPIO6, GPIO7, I2C0},
+    peripherals::I2C0,
     time::Rate,
 };
 
@@ -23,9 +23,9 @@ pub struct Touch {
 impl Touch {
     pub fn new(
         i2c0: I2C0<'static>,
-        sda: GPIO6<'static>,
-        scl: GPIO7<'static>,
-        reset_pin: GPIO13<'static>,
+        sda: impl InputPin + OutputPin + 'static,
+        scl: impl InputPin + OutputPin + 'static,
+        reset_pin: impl OutputPin + 'static,
     ) -> Self {
         let reset = Output::new(
             reset_pin,

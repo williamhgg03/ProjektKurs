@@ -2,8 +2,8 @@ use embedded_hal_bus::spi::{ExclusiveDevice, NoDelay};
 
 use esp_hal::{
     delay::Delay,
-    gpio::{Level, Output, OutputConfig},
-    peripherals::{SPI2, GPIO47, GPIO38, GPIO21, GPIO18, GPIO17, GPIO10},
+    gpio::{interconnect::PeripheralOutput, Level, Output, OutputConfig, OutputPin},
+    peripherals::SPI2,
     spi::{
         master::{Config as SpiConfig, Spi},
         Mode,
@@ -45,35 +45,35 @@ pub struct Lcd {
 impl Lcd {
     pub fn new(
         spi2: SPI2<'static>,
-        MOSI: GPIO47<'static>,
-        SCLK: GPIO38<'static>,
-        LCD_CS: GPIO21<'static>,
-        LCD_DC: GPIO18<'static>,
-        LCD_RST: GPIO17<'static>,
-        LCD_BL: GPIO10<'static>,
+        mosi: impl PeripheralOutput<'static>,
+        sclk: impl PeripheralOutput<'static>,
+        lcd_cs: impl OutputPin + 'static,
+        lcd_dc: impl OutputPin + 'static,
+        lcd_rst: impl OutputPin + 'static,
+        lcd_bl: impl OutputPin + 'static,
     ) -> Self {
 
         let mut backlight = Output::new(
-            LCD_BL,
+            lcd_bl,
             Level::Low,
             OutputConfig::default(),
         );
         backlight.set_high();
 
         let reset = Output::new(
-            LCD_RST,
+            lcd_rst,
             Level::High,
             OutputConfig::default(),
         );
 
         let dc = Output::new(
-            LCD_DC,
+            lcd_dc,
             Level::High,
             OutputConfig::default(),
         );
 
         let cs = Output::new(
-            LCD_CS,
+            lcd_cs,
             Level::High,
             OutputConfig::default(),
         );
@@ -85,8 +85,8 @@ impl Lcd {
                 .with_mode(Mode::_0),
         )
         .expect("Failed to initialize LCD SPI")
-        .with_sck(SCLK)
-        .with_mosi(MOSI);
+        .with_sck(sclk)
+        .with_mosi(mosi);
 
         let bus = ExclusiveDevice::new(
             spi,
