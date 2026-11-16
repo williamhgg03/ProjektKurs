@@ -46,10 +46,15 @@
   #preview .led { box-shadow: 0 0 8px var(--glow, transparent); }
   .note { color: var(--muted); font-size: 12px; margin-top: 8px; min-height: 1.5em; }
   .note.err { color: var(--danger); }
+  nav { display: flex; gap: 4px; }
+  nav a { color: var(--muted); text-decoration: none; padding: 4px 10px; border: 1px solid transparent; border-radius: 6px; }
+  nav a:hover { color: var(--text); }
+  nav a[aria-current] { color: var(--text); background: var(--panel); border-color: var(--border); }
 </style>
 </head>
 <body>
 <main>
+  <nav><a href="/" aria-current="page">LED strip</a><a href="/segway">Segway</a></nav>
   <header>
     <h1>LED Strip Control</h1>
     <span id="status">connecting…</span>

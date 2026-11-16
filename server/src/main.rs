@@ -1,13 +1,17 @@
-mod controller;
 mod led;
 mod routes;
+mod segway;
+mod segway_routes;
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::watch;
 
-use crate::{controller::DisplayState, led::LedState};
+use crate::led::LedState;
+use crate::segway::TelemetryLog;
+use crate::segway_routes::SegwayState;
 
 #[tokio::main]
 async fn main() {
@@ -20,11 +24,19 @@ async fn main() {
         .unwrap_or(80);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
-    let state = Arc::new(routes::AppState {
-        led: watch::Sender::new(LedState::default()),
-        controller: watch::Sender::new(DisplayState::default()),
+    let state = Arc::new(watch::Sender::new(LedState::default()));
+
+    // Segway: tuning (trim, gains) survives restarts in a JSON file, telemetry goes to a CSV
+    let settings_path = env_path("SEGWAY_SETTINGS", "segway_settings.json");
+    let csv_path = env_path("SEGWAY_LOG", "segway_telemetry.csv");
+    let telemetry = TelemetryLog::with_csv(&csv_path).unwrap_or_else(|e| {
+        tracing::warn!("can't open {}, telemetry is kept in memory only: {e}", csv_path.display());
+        TelemetryLog::default()
     });
-    let app = routes::router(state);
+    let segway = SegwayState::new(settings_path, telemetry);
+    segway_routes::spawn_drive_deadman(segway.clone());
+
+    let app = routes::router(state).merge(segway_routes::router(segway));
 
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(l) => l,
@@ -40,4 +52,8 @@ async fn main() {
     tracing::info!("listening on http://{addr}");
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .await.expect("server error");
+}
+
+fn env_path(var: &str, default: &str) -> PathBuf {
+    PathBuf::from(std::env::var(var).unwrap_or_else(|_| default.into()))
 }
