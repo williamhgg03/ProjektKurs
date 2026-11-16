@@ -7,32 +7,35 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
+// Segway remote control: four arrow buttons on a round touch screen. A held
+// button is sent to the server as a drive command, which the Segway polls for.
+//
+//   touch_task  --BUTTON_SIGNAL-->  display_task  (highlights the button)
+//               --DRIVE_SIGNAL--->  drive_task    (POST /api/segway/drive)
+
+use alloc::string::ToString;
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_net::{
+    Runner, StackResources,
     dns::DnsSocket,
     tcp::client::{TcpClient, TcpClientState},
-    Runner, StackResources,
 };
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_println as _;
+use esp_radio::wifi::sta::eap::EapStationConfig;
 use esp_radio::wifi::{
     AuthenticationMethod, Config as WifiConfig, ControllerConfig, Interface, WifiController,
     sta::StationConfig,
 };
-use esp_radio::wifi::sta::eap::EapStationConfig;
-use alloc::string::ToString;
-use reqwless::{
-    client::HttpClient,
-    request::Method,
-};
 
 extern crate alloc;
 
-mod system;
+mod controller;
+mod drive;
 mod lcd;
-mod protocol;
+mod system;
 mod touch;
 
 macro_rules! mk_static {
@@ -44,7 +47,6 @@ macro_rules! mk_static {
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
-const SERVER_URL: &str = env!("SERVER_URL");
 const WIFI_EAP_USERNAME: Option<&str> = option_env!("WIFI_EAP_USERNAME");
 const WIFI_EAP_IDENTITY: Option<&str> = option_env!("WIFI_EAP_IDENTITY");
 
@@ -61,13 +63,49 @@ async fn main(spawner: Spawner) -> ! {
     // generator version: 1.3.0
     // generator parameters: --chip esp32s3 -o unstable-hal -o alloc -o wifi -o ci -o neovim -o defmt -o esp-backtrace -o embassy -o esp
 
-    let m_Peripherals = system::hardware::init();
+    let m_peripherals = system::hardware::init();
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 73744);
-    let m_Timg0 = system::timer::init(m_Peripherals.TIMG0);
-    let m_SwInterrupt = system::interrupt::init(m_Peripherals.SW_INTERRUPT);
-    esp_rtos::start(m_Timg0.timer0, m_SwInterrupt.software_interrupt0);
+    let m_timg0 = system::timer::init(m_peripherals.TIMG0);
+    let m_sw_interrupt = system::interrupt::init(m_peripherals.SW_INTERRUPT);
+    esp_rtos::start(m_timg0.timer0, m_sw_interrupt.software_interrupt0);
 
     info!("Embassy initialized!");
+
+    // Pin map for the Waveshare ESP32-S3-Zero. Only pins on the two side
+    // headers (GP1-GP13) are used. Avoided: GP0/GP3/GP45/GP46 (strapping),
+    // GP21 (onboard WS2812 LED), GP19/GP20 (USB), GP43/GP44 (UART0 TX/RX).
+    //
+    //   1.28" Touch LCD  ->  ESP32-S3-Zero
+    //   LCD_DIN/MOSI     ->  GP11
+    //   LCD_CLK/SCLK     ->  GP12
+    //   LCD_CS           ->  GP10
+    //   LCD_DC           ->  GP9
+    //   LCD_RST          ->  GP8
+    //   LCD_BL           ->  GP7
+    //   TP_SDA           ->  GP6
+    //   TP_SCL           ->  GP5
+    //   TP_INT           ->  GP4  (wired, not used by the firmware yet)
+    //   TP_RST           ->  GP2
+    let lcd = lcd::display::Lcd::new(
+        m_peripherals.SPI2,
+        m_peripherals.GPIO11, // MOSI
+        m_peripherals.GPIO12, // SCLK
+        m_peripherals.GPIO10, // LCD_CS
+        m_peripherals.GPIO9,  // LCD_DC
+        m_peripherals.GPIO8,  // LCD_RST
+        m_peripherals.GPIO7,  // LCD_BL
+    );
+
+    let touch = touch::touch::Touch::new(
+        m_peripherals.I2C0,
+        m_peripherals.GPIO6, // TP_SDA
+        m_peripherals.GPIO5, // TP_SCL
+        m_peripherals.GPIO2, // TP_RST
+    );
+
+    // The screen and touch work before (and without) the network
+    spawner.spawn(lcd::display_task(lcd).expect("Failed to spawn LCD task"));
+    spawner.spawn(touch::touch_task(touch).expect("Failed to spawn touch task"));
 
     let wifi_config = if let Some(username) = WIFI_EAP_USERNAME {
         let identity = WIFI_EAP_IDENTITY.unwrap_or(username);
@@ -90,7 +128,7 @@ async fn main(spawner: Spawner) -> ! {
     };
 
     let (wifi_controller, interfaces) = esp_radio::wifi::new(
-        m_Peripherals.WIFI,
+        m_peripherals.WIFI,
         ControllerConfig::default().with_initial_config(wifi_config),
     )
     .expect("Failed to initialize Wi-Fi controller");
@@ -106,14 +144,8 @@ async fn main(spawner: Spawner) -> ! {
         seed,
     );
 
-    spawner.spawn(
-        wifi_connection(wifi_controller)
-            .expect("Failed to spawn Wi-Fi connection task"),
-    );
-    spawner.spawn(
-        network_task(runner)
-            .expect("Failed to spawn network task"),
-    );
+    spawner.spawn(wifi_connection(wifi_controller).expect("Failed to spawn Wi-Fi connection task"));
+    spawner.spawn(network_task(runner).expect("Failed to spawn network task"));
 
     stack.wait_config_up().await;
     if let Some(config) = stack.config_v4() {
@@ -128,59 +160,13 @@ async fn main(spawner: Spawner) -> ! {
         ),
     );
     let dns_client = DnsSocket::new(stack);
+    let rx_buf = mk_static!([u8; drive::RX_BUF_SIZE], [0u8; drive::RX_BUF_SIZE]);
     spawner.spawn(
-        http_probe(tcp_client, dns_client)
-            .expect("Failed to spawn HTTP task"),
+        drive::drive_task(tcp_client, dns_client, rx_buf).expect("Failed to spawn drive task"),
     );
-
-    // Pin map for the Waveshare ESP32-S3-Zero. Only pins on the two side
-    // headers (GP1-GP13) are used. Avoided: GP0/GP3/GP45/GP46 (strapping),
-    // GP21 (onboard WS2812 LED), GP19/GP20 (USB), GP43/GP44 (UART0 TX/RX).
-    //
-    //   1.28" Touch LCD  ->  ESP32-S3-Zero
-    //   LCD_DIN/MOSI     ->  GP11
-    //   LCD_CLK/SCLK     ->  GP12
-    //   LCD_CS           ->  GP10
-    //   LCD_DC           ->  GP9
-    //   LCD_RST          ->  GP8
-    //   LCD_BL           ->  GP7
-    //   TP_SDA           ->  GP6
-    //   TP_SCL           ->  GP5
-    //   TP_INT           ->  GP4  (wired, not used by the firmware yet)
-    //   TP_RST           ->  GP2
-    let lcd = lcd::display::Lcd::new(
-        m_Peripherals.SPI2,
-        m_Peripherals.GPIO11, // MOSI
-        m_Peripherals.GPIO12, // SCLK
-        m_Peripherals.GPIO10, // LCD_CS
-        m_Peripherals.GPIO9,  // LCD_DC
-        m_Peripherals.GPIO8,  // LCD_RST
-        m_Peripherals.GPIO7,  // LCD_BL
-    );
-
-    let touch = touch::touch::Touch::new(
-        m_Peripherals.I2C0,
-        m_Peripherals.GPIO6, // TP_SDA
-        m_Peripherals.GPIO5, // TP_SCL
-        m_Peripherals.GPIO2, // TP_RST
-    );
-
-    // TODO: Spawn some tasks
-    spawner
-        .spawn(lcd::display_task(lcd)
-        .expect("Failed to spawn LCD task")
-    );
-
-    spawner.spawn(
-        touch::touch_task(touch)
-            .expect("Failed to create touch task"),
-    );
-
-    info!("LCD task spawned");
 
     loop {
-        info!("Hello world!");
-        Timer::after(Duration::from_secs(1)).await;
+        Timer::after(Duration::from_secs(60)).await;
     }
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.1.0/examples
@@ -207,45 +193,4 @@ async fn wifi_connection(mut controller: WifiController<'static>) {
 #[embassy_executor::task]
 async fn network_task(mut runner: Runner<'static, Interface<'static>>) {
     runner.run().await;
-}
-
-#[embassy_executor::task]
-async fn http_probe(
-    tcp_client: TcpClient<'static, 1, 1500, 1500>,
-    dns_client: DnsSocket<'static>,
-) {
-    let mut client = HttpClient::new(&tcp_client, &dns_client);
-
-    loop {
-        let mut response_buffer = [0u8; 1024];
-        match client.request(Method::GET, SERVER_URL).await {
-            Ok(mut request) => match request.send(&mut response_buffer).await {
-                Ok(response) => {
-                    info!("HTTP server responded with status {}", response.status.0);
-                    match response.body().read_to_end().await {
-                        Ok(body) => match serde_json_core::from_slice::<protocol::DisplayState>(body) {
-                            Ok((state, _)) => {
-                                info!(
-                                    "Display state {}: {} - {}",
-                                    state.version,
-                                    state.title.as_str(),
-                                    state.message.as_str()
-                                );
-                            }
-                            Err(_) => info!("HTTP response was not valid display state JSON"),
-                        },
-                        Err(_) => info!("Failed to read HTTP response body"),
-                    }
-                }
-                Err(_) => {
-                    info!("HTTP request failed");
-                }
-            },
-            Err(_) => {
-                info!("HTTP request failed");
-            }
-        }
-
-        Timer::after(Duration::from_secs(30)).await;
-    }
 }

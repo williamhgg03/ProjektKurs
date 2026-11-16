@@ -8,15 +8,10 @@ use esp_hal::{
     time::Rate,
 };
 
-use cst816s::{Cst816s};
-
-use crate::lcd::TOUCH_SIGNAL;
+use cst816s::Cst816s;
 
 pub struct Touch {
-    driver: Cst816s<
-        I2c<'static, esp_hal::Blocking>,
-        Delay,
-    >,
+    driver: Cst816s<I2c<'static, esp_hal::Blocking>, Delay>,
     reset: Output<'static>,
 }
 
@@ -27,16 +22,11 @@ impl Touch {
         scl: impl InputPin + OutputPin + 'static,
         reset_pin: impl OutputPin + 'static,
     ) -> Self {
-        let reset = Output::new(
-            reset_pin,
-            Level::High,
-            OutputConfig::default(),
-        );
+        let reset = Output::new(reset_pin, Level::High, OutputConfig::default());
 
         let i2c = I2c::new(
             i2c0,
-            I2cConfig::default()
-                .with_frequency(Rate::from_khz(400)),
+            I2cConfig::default().with_frequency(Rate::from_khz(400)),
         )
         .expect("Failed to initialize touch I2C")
         .with_sda(sda)
@@ -46,10 +36,7 @@ impl Touch {
 
         let driver = Cst816s::new(i2c, delay);
 
-        Self {
-            driver,
-            reset,
-        }
+        Self { driver, reset }
     }
 
     pub fn init(&mut self) {
@@ -60,22 +47,13 @@ impl Touch {
         info!("CST816S initialized!");
     }
 
-    pub fn read(&mut self) {
+    /// Where the finger is, `None` when nothing touches the screen. The chip
+    /// goes to sleep when untouched and then doesn't answer on I2C, so a failed
+    /// read also means no touch.
+    pub fn read(&mut self) -> Option<(u16, u16)> {
         match self.driver.read_event() {
-            Ok(event) => {
-                info!(
-                    "Touch: x={} y={}",
-                    event.x,
-                    event.y
-                );
-
-                TOUCH_SIGNAL.signal(true);
-            }
-
-            Err(_) => {
-                TOUCH_SIGNAL.signal(false);
-                info!("CST816S I2C read failed");
-            }
+            Ok(event) if event.finger_number > 0 => Some((event.x, event.y)),
+            Ok(_) | Err(_) => None,
         }
     }
 }
