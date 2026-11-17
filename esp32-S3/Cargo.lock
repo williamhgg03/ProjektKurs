@@ -99,12 +99,6 @@ checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "bitfield"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c821a6e124197eb56d907ccc2188eab1038fb919c914f47976e64dd8dbc855d1"
-
-[[package]]
-name = "bitfield"
 version = "0.19.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b45721c9db4c7a20899d05efb7ad9235f50b256e980db30ffb229abf732934c3"
@@ -312,16 +306,6 @@ checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
  "generic-array 0.14.7",
  "typenum",
-]
-
-[[package]]
-name = "cst816s-rs"
-version = "0.1.0"
-source = "git+https://github.com/IniterWorker/cst816s?rev=966a0761f992c63ea1a953ba3d4a3fab8de15db0#966a0761f992c63ea1a953ba3d4a3fab8de15db0"
-dependencies = [
- "bitfield 0.15.0",
- "embedded-hal 1.0.0",
- "libm",
 ]
 
 [[package]]
@@ -1136,7 +1120,7 @@ version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e2874462a2a0faca8b6318a10b0db87d2b7cd74dded82b3dfd780c07a319038"
 dependencies = [
- "bitfield 0.19.5",
+ "bitfield",
  "bitflags 2.13.2",
  "bytemuck",
  "cfg-if",
@@ -1457,7 +1441,6 @@ name = "esp32-S3"
 version = "0.1.0"
 dependencies = [
  "critical-section",
- "cst816s-rs",
  "defmt 1.1.1",
  "display-interface",
  "display-interface-spi",
@@ -1960,12 +1943,6 @@ name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
-
-[[package]]
-name = "libm"
-version = "0.2.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "linked_list_allocator"
