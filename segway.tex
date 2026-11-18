@@ -140,7 +140,7 @@
       & \partial_{t \, , \, \dot{\theta}_b} \mathcal{L} - \partial_{\theta_b} \mathcal{L} = Q_{\theta_b} \Rightarrow \\
       & \quad m_b \, l_b^2 \, \ddot{\theta}_b + \frac{m_b \, l_b \, l_w}{2} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) \, cos(\theta_b) +  I_{b_{yy}} \, \ddot{\theta}_b + \\
       & \quad - \frac{m_b \, l_b^2 \, l_w^2}{L^2} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 \, sin(\theta_b) \, cos(\theta_b) + \\
-      & \quad + \frac{l_w^2}{L^2} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 \, ( I_{b_{zz}} - I_{b_{xx}} ) \, sin(\theta_b) \, cos(\theta_b)  - m_b \, g \, l_b \, sin(\theta_b) = Q_{\theta_b}
+      & \quad + \frac{l_w^2}{L^2} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_{w_{left}} )^2 \, ( I_{b_{zz}} - I_{b_{xx}} ) \, sin(\theta_b) \, cos(\theta_b) - m_b \, g \, l_b \, sin(\theta_b) = Q_{\theta_b}
     \end{aligned}
   }
 \]
@@ -171,14 +171,48 @@
 
 
 \[
-  \begin{aligned}
-    Q_{\theta_{w_{left}}} &= T_{m_{left}} - T_{f_{left}} + \frac{l_w}{2} \, F \\
-    &= \frac{K_t}{R_m} \, v_{left} - \frac{K_e \, K_t}{R_m} \, ( \dot{\theta}_{w_{left}} - \dot{\theta}_b ) - b_f \, ( \dot{\theta}_{w_{left}} - \dot{\theta}_b ) + \frac{l_w}{2} \, F \\
-    Q_{\theta_{w_{right}}} &= T_{m_{right}}-T_{f_{right}} + \frac{l_w}{2} \, F \\
-    &= \frac{K_t}{R_m} \, v_{right} - \frac{K_e \, K_t}{R_m} \,( \dot{\theta}_{w_{right}} - \dot{\theta}_b ) - b_f \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_b ) + \frac{l_w}{2} \, F \\
-    Q_{\theta_b} &= -T_{m_{left}} + T_{f_{left}} - T_{m_{right}}+T_{f_{right}} + l_b \, F \, cos(\theta_b) \\
-  &= -Q_{\theta_{w_{left}}}-Q_{\theta_{w_{right}}} + l_b \, F \, cos(\theta_b)
-\end{aligned}
+  \mathrm{
+    \begin{aligned}
+      Q_{\theta_{w_{left}}} &= T_{m_{left}} - T_{f_{left}} + \frac{l_w}{2} \, F \\
+      &= \frac{K_t}{R_m} \, v_{left} - \frac{K_e \, K_t}{R_m} \, ( \dot{\theta}_{w_{left}} - \dot{\theta}_b ) - b_f \, ( \dot{\theta}_{w_{left}} - \dot{\theta}_b ) + \frac{l_w}{2} \, F \\
+      Q_{\theta_{w_{right}}} &= T_{m_{right}}-T_{f_{right}} + \frac{l_w}{2} \, F \\
+      &= \frac{K_t}{R_m} \, v_{right} - \frac{K_e \, K_t}{R_m} \,( \dot{\theta}_{w_{right}} - \dot{\theta}_b ) - b_f \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_b ) + \frac{l_w}{2} \, F \\
+      Q_{\theta_b} &= -T_{m_{left}} + T_{f_{left}} - T_{m_{right}}+T_{f_{right}} + l_b \, F \, cos(\theta_b) \\
+      &= -Q_{\theta_{w_{left}}}-Q_{\theta_{w_{right}}} + l_b \, F \, cos(\theta_b)
+    \end{aligned}
+  }
+\]
+
+\section{Linearization}
+
+\[
+  \mathrm{
+    \begin{aligned}
+      & ( m_b \, l_b^2 + I_{b_{yy}} ) \, \ddot{\theta}_b + \frac{m_b \, l_b \, l_w}{2} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) - m_b \, l_b \, g \, \theta_b + \\
+      & + 2 \, ( \frac{K_e \, K_t}{R_m} + b_f ) \, \dot{\theta}_b - ( \frac{K_e \, K_t}{R_m} + b_f ) \, ( \dot{\theta}_{w_{left}} + \dot{\theta}_{w_{right}} ) = \\
+      & = - \frac{K_t}{R_m} \, ( V_{left} + V_{right} ) + ( l_b - l_w ) \, F
+    \end{aligned}
+  }
+\]
+
+\[
+  \mathrm{
+    \begin{aligned}
+      & \frac{m_b \, l_w^2}{4} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \frac{m_b \, l_b \, l_w}{2} \, \ddot{\theta}_b - \frac{l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) \, I_{b_{zz}} + \\
+      & + m_w \, l_w^2 \, \ddot{\theta}_{w_{left}} + I_{w_{xx}} \, \ddot{\theta}_{w_{left}} - \frac{2 \, I_{w_{zz}} \, l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) + \\
+      & + \frac{K_e \, K_t}{R_m} \, ( \dot{\theta}_{w_{left}} - \dot{\theta}_b ) + b_f \, ( \dot{\theta}_{w_{left}} - \dot{\theta}_b ) = \frac{K_t}{R_m} \, V_{left} + \frac{l_w}{2} \, F
+    \end{aligned}
+  }
+\]
+
+\[
+  \mathrm{
+    \begin{aligned}
+      & \frac{m_b \, l_w^2}{4} \, ( \ddot{\theta}_{w_{left}} + \ddot{\theta}_{w_{right}} ) + \frac{m_b \, l_b \, l_w}{2} \, \ddot{\theta}_b + \frac{l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) \, I_{b_{zz}} + \\
+      & + m_w \, l_w^2 \, \ddot{\theta}_{w_{right}} + I_{w_{xx}} \, \ddot{\theta}_{w_{right}} + \frac{2 \, I_{w_{zz}} \, l_w^2}{L^2} \, ( \ddot{\theta}_{w_{right}} - \ddot{\theta}_{w_{left}} ) + \\
+      & + \frac{K_e \, K_t}{R_m} \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_b ) + b_f \, ( \dot{\theta}_{w_{right}} - \dot{\theta}_b ) = \frac{K_t}{R_m} \, V_{right} + \frac{l_w}{2} \, F
+    \end{aligned}
+  }
 \]
 
 \end{document}
